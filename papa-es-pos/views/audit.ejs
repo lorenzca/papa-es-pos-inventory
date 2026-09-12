@@ -53,7 +53,10 @@
         </tr>
       <% } %>
       <% logs.forEach(log => { 
-           const d = log.parsedDetails || {};
+            let d = log.parsedDetails || log.details || {};
+            if (typeof d === 'string') {
+              try { d = JSON.parse(d); } catch (e) { d = {}; }
+            }
       %>
         <tr class="border-t border-slate-800 hover:bg-slate-800/40 align-top transition">
           <td class="py-2.5 text-xs text-white/60 whitespace-nowrap"><%= log.created_at %></td>
@@ -71,8 +74,18 @@
           <td class="text-xs text-white/60"><%= log.entity_type %><%= log.entity_id ? (' #' + log.entity_id) : '' %></td>
           <td class="text-xs text-white/80 max-w-md">
             <% if (log.action === 'SALE_COMPLETED') { %>
-              <span class="font-semibold text-white"><%= d.or_number || 'Sale' %></span> · Total: ₱<%= Number(d.total || 0).toFixed(2) %> (<%= d.payment_method %>)
-              <% if (d.table_number) { %><span class="text-white/50">· <%= d.table_number %></span><% } %>
+              <span class="font-semibold text-white"><%= d.or_number || 'Sale' %></span> · Total: ₱<%= Number(d.total || 0).toFixed(2) %> (<%= d.payment_method %>)<% if (d.table_number) { %> <span class="text-white/50">· <%= d.table_number %></span><% } %>
+
+            <% } else if (log.action === 'USER_LOGIN' || log.action === 'USER_LOGOUT') { %>
+              <span>Logged in as <strong class="text-papaGold"><%= d.username %></strong> (<%= d.role %>)</span>
+
+            <% } else if (log.action.includes('STOCK_') || log.action === 'RESTOCK' || log.action === 'DEDUCT') { %>
+              <span>
+                <strong class="text-white"><%= d.ingredient_name || 'Item' %></strong>: 
+                <%= (d.quantity_change > 0 ? '+' : '') + (d.quantity_change ?? d.qty ?? '') %> 
+                <span class="text-white/50">(<%= d.reason || d.movement_type || 'Stock Change' %>)</span>
+              </span>
+
             <% } else if (log.action.includes('VOID')) { %>
               <div class="space-y-0.5">
                 <div><span class="font-semibold text-white"><%= d.item_name || 'Void Action' %></span> <% if (d.reason) { %><span class="text-white/50">("<%= d.reason %>")</span><% } %></div>
@@ -83,10 +96,15 @@
                   <div class="text-white/50 text-[11px]">Outcome: <%= d.applied %><%= d.voided_qty ? ` (Qty: ${d.voided_qty})` : '' %></div>
                 <% } %>
               </div>
+
             <% } else if (log.action.includes('TABLE_')) { %>
               <span><%= d.table_number %></span> · Subtotal: ₱<%= Number(d.subtotal || 0).toFixed(2) %> (<%= d.item_count %> items)
+
+            <% } else if (d && Object.keys(d).length) { %>
+              <span class="text-white/70 font-mono text-[11px]"><%= Object.entries(d).map(([k, v]) => `${k}: ${v}`).join(' · ') %></span>
+
             <% } else { %>
-              <pre class="whitespace-pre-wrap font-mono text-[11px] text-white/70"><%= JSON.stringify(d, null, 2) %></pre>
+              <span class="text-white/40">—</span>
             <% } %>
           </td>
         </tr>
