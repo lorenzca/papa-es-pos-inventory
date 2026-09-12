@@ -126,19 +126,6 @@ papa-es-pos/
    npm start
 5. Open: `http://localhost:3000`
 
-```markdown
-## Installation and Run (XAMPP / MySQL)
-1. Install **Node.js 18+** and **XAMPP**.
-2. Start **Apache** and **MySQL** in the XAMPP Control Panel.
-3. Open phpMyAdmin (`http://localhost/phpmyadmin`), create a database, and import `database.sql`.
-4. Open your terminal in the project directory:
-   ```bash
-   cd papa-es-pos
-   npm ci
-   npm start
-   ```
-5. Open your browser and go to: `http://localhost:3000/login`
-
 ---
 
 ## Default Accounts
