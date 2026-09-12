@@ -48,13 +48,13 @@ papa-es-pos/
 │   │   └── style.css
 │   ├── img/
 │   │   └── qr/
-│   │       └── gcash.png
+│   │       ├── gcash.png
 │   │       └── maya.png
 │   │   └── PapaEs_Logo.png
 │   ├── js/
-│   │   └── pos.js
-│   │   └── price.js
-│   │   └── quick-jump.js
+│   │   ├── pos.js
+│   │   ├── price.js
+│   │   ├── quick-jump.js
 │   │   └── smart-search.js
 │   └── uploads/
 │       └── menu/
