@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
+  <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
+</head>
+<body class="text-white p-4 md:p-6">
+  <%- include('partials/header', { user, pageTitle: 'Inventory Management' }) %>
+
+  <nav class="mb-4 flex flex-wrap gap-2 text-sm">
+    <% if (user && ['OWNER','MANAGER'].includes(user.role)) { %><a href="/dashboard" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Dashboard</a><a href="/menu" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Menu</a><% } %>
+    <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
+  </nav>
+
+  <section class="card-panel p-4 overflow-x-auto">
+    <!-- Search Bar & Helper Text Container -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+      <p class="text-sm text-white/70">Click any row to restock or adjust stock.</p>
+      
+      <div class="flex items-center gap-2">
+        <input 
+          type="text" 
+          id="inventorySearch" 
+          oninput="filterInventory()" 
+          placeholder="Search ingredients"
+          class="bg-slate-800 text-sm text-white border border-slate-700 focus:border-papaGold focus:outline-none p-2 rounded min-w-[200px]"
+        />
+        <button 
+          type="button" 
+          onclick="filterInventory()" 
+          class="bg-papaGold text-black font-semibold text-sm px-3 py-2 rounded hover:bg-yellow-500 transition"
+        >
+          Search
+        </button>
+      </div>
+    </div>
+
+    <table class="w-full text-sm" id="inventoryTable">
+      <thead><tr><th class="text-left">Ingredient</th><th class="text-right">Stock</th><th>Unit</th><th class="text-right">Reorder</th><th class="text-right">Cost</th></tr></thead>
+      <tbody>
+      <% ingredients.forEach(i=>{ %>
+        <tr class="border-t border-slate-700 cursor-pointer hover:bg-white/5"
+            data-search="<%= i.ingredient_name %> <%= i.unit_measure %>"
+            onclick="openRestockModal(<%= i.id %>, '<%= i.ingredient_name %>')">
+          <td><%= i.ingredient_name %></td>
+          <td class="text-right"><%= Number(i.stock_qty).toFixed(2) %></td>
+          <td><%= i.unit_measure %></td>
+          <td class="text-right"><%= i.reorder_level %></td>
+          <td class="text-right">₱<%= Number(i.unit_cost).toFixed(2) %></td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+    <p id="inventoryEmpty" class="hidden text-sm text-white/60 py-3">No ingredient matches that search.</p>
+  </section>
+
+  <div id="restockModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4">
+    <div class="card-panel p-4 w-full max-w-md">
+      <h3 class="text-xl text-papaGold font-semibold mb-2">Restock Ingredient</h3>
+      <form method="POST" action="/inventory/adjust" class="space-y-2">
+        <input type="hidden" name="ingredient_id" id="modalIngredientId" />
+        <p id="modalIngredientLabel" class="text-sm text-white/80"></p>
+        <select name="movement_type" class="w-full bg-slate-800 p-2 rounded">
+          <option value="RESTOCK">RESTOCK</option>
+          <option value="ADJUSTMENT">ADJUSTMENT</option>
+        </select>
+        <input name="qty" type="number" step="0.01" required placeholder="Quantity (+/-)" class="w-full bg-slate-800 p-2 rounded"/>
+        <textarea name="reason" required placeholder="Notes" class="w-full bg-slate-800 p-2 rounded"></textarea>
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="closeRestockModal()" class="px-3 py-2 rounded bg-white/10">Cancel</button>
+          <button class="bg-papaGold text-black px-4 py-2 rounded font-bold">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/smart-search.js?v=<%= locals.assetVersion || 0 %>"></script>
+  <script>
+    // opens the restock/adjust modal, prefilled with the clicked ingredient.
+    function openRestockModal(id, name) {
+      document.getElementById('modalIngredientId').value = id;
+      document.getElementById('modalIngredientLabel').innerText = `Ingredient: ${name}`;
+      const modal = document.getElementById('restockModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    // closes the modal without submitting.
+    function closeRestockModal() {
+      const modal = document.getElementById('restockModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // filters inventory rows live as you type. the matching itself lives in
+    // smart-search.js, so "ckng oil", "oil" and "coking oil" all find
+    // cooking Oil the same engine the POS and menu list use.
+    function filterInventory() {
+      const query = document.getElementById('inventorySearch').value;
+      const rows = document.querySelectorAll('#inventoryTable tbody tr');
+
+      const shown = PapaSearch.applyToElements(query, rows);
+      document.getElementById('inventoryEmpty').classList.toggle('hidden', shown > 0);
+    }
+
+    // trigger search when pressing "enter" inside the input box
+    document.getElementById('inventorySearch').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        filterInventory();
+      }
+    });
+  </script>
+</body>
+</html>

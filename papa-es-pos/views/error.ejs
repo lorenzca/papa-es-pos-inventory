@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Error</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 text-white">
+  <div class="card-panel p-6 max-w-lg w-full text-center">
+    <img src="/img/PapaEs_Logo.png" alt="Papa Es Logo" class="brand-logo mx-auto mb-3" />
+    <h1 class="text-2xl text-red-400 font-bold mb-2">Something went wrong</h1>
+    <p class="text-white/80"><%= message %></p>
+    <% const fallback = user ? (user.role === 'CASHIER' ? '/pos' : user.role === 'KITCHEN' ? '/inventory' : '/dashboard') : '/login'; %>
+    <a href="<%= fallback %>" class="inline-block mt-4 px-4 py-2 rounded bg-papaRed text-papaGold">Back</a>
+  </div>
+</body>
+</html>

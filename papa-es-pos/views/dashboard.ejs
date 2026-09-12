@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
+  <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
+</head>
+<body class="text-white p-4 md:p-6">
+  <%- include('partials/header', { user, pageTitle: user.role === 'OWNER' ? 'Owner Dashboard' : 'Manager Dashboard' }) %>
+
+  <%# page tabs stay put, the quick Menu in the header is an extra shortcut, %>
+  <%# not a replacement for these.                                            %>
+  <nav class="mb-4 flex flex-wrap gap-2 text-sm">
+    <a href="/pos" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">POS</a>
+    <a href="/menu" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Menu</a>
+    <a href="/inventory" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Inventory</a>
+    <a href="/reports" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Reports</a>
+    <a href="/audit" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Audit Trail</a>
+    <% if (user && user.role === 'OWNER') { %><a href="/users" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Accounts</a><% } %>
+    <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
+  </nav>
+
+  <% const peso = (value) => '₱ ' + Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); %>
+
+  <% if (locals.dataError) { %>
+    <p class="mb-4 rounded border border-red-500/40 bg-red-900/30 px-3 py-2 text-sm text-red-200"><%= dataError %></p>
+  <% } %>
+
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <article class="metric-card">
+      <p class="text-white/60">Today's Revenue</p>
+      <p class="text-2xl font-bold text-papaGold"><%= peso(metrics.revenue) %></p>
+      <p class="text-xs text-white/40"><%= metrics.orderCount || 0 %> completed order<%= (metrics.orderCount || 0) === 1 ? '' : 's' %></p>
+    </article>
+    <article class="metric-card">
+      <p class="text-white/60">COGS</p>
+      <p class="text-2xl font-bold text-papaGold"><%= peso(metrics.cogs) %></p>
+      <p class="text-xs text-white/40">Recipe cost of what was sold</p>
+    </article>
+    <article class="metric-card">
+      <p class="text-white/60">Gross Profit</p>
+      <p class="text-2xl font-bold <%= metrics.grossProfit < 0 ? 'text-red-400' : 'text-green-400' %>"><%= peso(metrics.grossProfit) %></p>
+      <p class="text-xs text-white/40">
+        <% if (metrics.revenue > 0) { %>
+          <%= ((metrics.grossProfit / metrics.revenue) * 100).toFixed(1) %>% margin
+        <% } else { %>
+          Revenue &minus; COGS
+        <% } %>
+      </p>
+    </article>
+  </section>
+
+  <section class="card-panel p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <h2 class="text-xl font-semibold text-papaGold">Revenue Trend</h2>
+      <div class="space-x-2">
+        <button class="range-btn px-3 py-2 rounded bg-white/10" data-range="day">1 Day</button>
+        <button class="range-btn px-3 py-2 rounded bg-white/10" data-range="week">1 Week</button>
+        <button class="range-btn px-3 py-2 rounded bg-white/10" data-range="month">1 Month</button>
+      </div>
+    </div>
+    <p id="trendError" class="mb-2 hidden text-sm text-red-300"></p>
+    <%# maintainAspectRatio is off, so the chart fills this box instead of
+        deriving its own height from the canvas attributes. %>
+    <div class="h-64 md:h-80">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </section>
+
+  <script>
+    const DASHBOARD_DATE = <%- JSON.stringify(date) %>;
+    let currentRange = <%- JSON.stringify(range) %>;
+
+    const chart = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Revenue',
+          data: [],
+          borderColor: '#D4AF37',
+          backgroundColor: 'rgba(212,175,55,0.15)',
+          borderWidth: 2,
+          pointRadius: 3,
+          fill: true,
+          tension: 0.35
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#fff' } },
+          tooltip: {
+            callbacks: {
+              label: (item) => 'Revenue: ₱ ' + Number(item.parsed.y).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#d1d5db', maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,0.06)' } },
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            ticks: {
+              color: '#d1d5db',
+              callback: (value) => '₱' + Number(value).toLocaleString('en-PH')
+            }
+          }
+        }
+      }
+    });
+
+    const trendError = document.getElementById('trendError');
+
+    function drawTrend(points) {
+      chart.data.labels = points.map((point) => point.sales_date);
+      chart.data.datasets[0].data = points.map((point) => Number(point.revenue) || 0);
+      chart.update();
+    }
+
+    // the first paint uses the series the server already rendered with, so the
+    // chart has data before any fetch resolves.
+    drawTrend(<%- JSON.stringify(trend) %>);
+
+    async function loadTrend(range) {
+      const params = new URLSearchParams({ range, date: DASHBOARD_DATE });
+      try {
+        const response = await fetch('/dashboard/trend?' + params.toString(), {
+          headers: { Accept: 'application/json' }
+        });
+        if (!response.ok) throw new Error('Request failed with ' + response.status);
+        const payload = await response.json();
+        drawTrend(payload.trend || []);
+        currentRange = range;
+        trendError.classList.add('hidden');
+      } catch (error) {
+        trendError.textContent = 'Could not load the ' + range + ' trend. ' + error.message;
+        trendError.classList.remove('hidden');
+      }
+    }
+
+    document.querySelectorAll('.range-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.range-btn').forEach((other) => {
+          other.classList.remove('bg-papaGold', 'text-black', 'font-semibold');
+        });
+        btn.classList.add('bg-papaGold', 'text-black', 'font-semibold');
+        loadTrend(btn.dataset.range);
+      });
+    });
+
+    // highlight whichever range the server rendered without refetching it.
+    const activeBtn = document.querySelector('.range-btn[data-range="' + currentRange + '"]')
+      || document.querySelector('.range-btn[data-range="week"]');
+    activeBtn.classList.add('bg-papaGold', 'text-black', 'font-semibold');
+  </script>
+</body>
+</html>

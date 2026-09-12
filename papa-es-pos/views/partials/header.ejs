@@ -1,0 +1,107 @@
+<%# ---------------------------------------------------------------------- %>
+<%# views/partials/header.ejs                                               %>
+<%# ---------------------------------------------------------------------- %>
+<%# Shared branding banner at the top of every page. Each view includes   %>
+<%# this file and passes in the current user object plus a pageTitle     %>
+<%# string so the subtitle reflects the section being shown.              %>
+<%#                                                                       %>
+<%# On the right sits the account chip: click it, or press Ctrl+K (⌘K on a  %>
+<%# Mac), and a search box lists every screen this role may open. Type a    %>
+<%# few letters, press Enter, and you are there. It carries the same       %>
+<%# destinations the old dropdown had — nothing that used to be reachable  %>
+<%# stopped being reachable — and the per-page nav strips are all still in %>
+<%# place.                                                                 %>
+<%# ---------------------------------------------------------------------- %>
+<header class="app-header">
+  <div class="brand-wrap">
+    <img src="/img/PapaEs_Logo.png" alt="Papa Es Diner Logo" class="brand-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" />
+    <div class="brand-fallback" style="display:none;">Papa Es</div>
+    <div>
+      <p class="brand-title">Papa Es Diner</p>
+      <% if (typeof pageTitle !== 'undefined') { %>
+        <p class="brand-subtitle"><%= pageTitle %></p>
+      <% } %>
+    </div>
+  </div>
+  <% if (user) { %>
+    <%
+      // Every destination, with the roles allowed to open it. Kept in step with
+      // the ensureRole() guards in routes/appRoutes.js.
+      //
+      // `keywords` are what a cashier is likely to type instead of the official
+      // label — "stock" for Inventory, "crew" for Accounts, "till" for the POS.
+      const quickLinks = [
+        { href: '/dashboard', label: 'Dashboard',   sub: 'Daily numbers at a glance', keywords: 'home overview metrics sales today', roles: ['OWNER', 'MANAGER'] },
+        { href: '/pos',       label: 'POS',         sub: 'Take an order and get paid', keywords: 'cashier till order sell checkout register', roles: ['OWNER', 'MANAGER', 'CASHIER'] },
+        { href: '/menu',      label: 'Menu',        sub: 'Items, prices and recipes', keywords: 'items food price recipe category', roles: ['OWNER', 'MANAGER'] },
+        { href: '/inventory', label: 'Inventory',   sub: 'Stock levels and restocking', keywords: 'stock ingredients supplies restock adjust', roles: ['OWNER', 'MANAGER', 'KITCHEN'] },
+        { href: '/reports',   label: 'Reports',     sub: 'Sales, voids, receipts, usage', keywords: 'sales voids receipts usage stock report', roles: ['OWNER', 'MANAGER'] },
+        { href: '/audit',     label: 'Audit Trail', sub: 'Who did what, and when', keywords: 'logs history trail activity', roles: ['OWNER', 'MANAGER'] },
+        { href: '/users',     label: 'Accounts',    sub: 'Crew, roles and PINs', keywords: 'crew staff users people role pin password', roles: ['OWNER'] },
+        { href: '/about',     label: 'About',       sub: 'Mission, vision and contact details', keywords: 'mission vision address contact phone number facebook diner location', roles: ['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN'] }
+      ].filter(link => link.roles.includes(user.role));
+
+      // Logout is offered to everyone and always sits last.
+      const jumpTargets = quickLinks
+        .map(link => ({ href: link.href, label: link.label, sub: link.sub, keywords: link.keywords, danger: false }))
+        .concat([{ href: '/logout', label: 'Logout', sub: 'End this shift on the terminal', keywords: 'sign out exit quit', danger: true }]);
+
+      // Initials for the account badge — first letter of the first two words,
+      // so "Papa Es Owner" reads as PE and a single-word name still shows one.
+      const accountInitials = String(user.full_name || '')
+        .trim().split(/\s+/).filter(Boolean).slice(0, 2)
+        .map(word => word.charAt(0).toUpperCase()).join('') || '?';
+    %>
+    <div class="header-actions">
+      <%# About sits here rather than in any one page's nav strip, because the
+          diner's address and phone numbers are the sort of thing anyone on any
+          screen ends up being asked for. The header is on every page, so this
+          keeps it one press away wherever the shift happens to be.
+
+          On a narrow phone it steps aside, because the banner only has room
+          for the brand and the account chip there. Nothing is lost: tapping
+          the chip opens Quick Jump, and About is one of its entries. %>
+      <a href="/about" class="mini-btn !hidden sm:!inline-flex" title="Mission, vision and contact details">About</a>
+      <%# The account chip is the only other affordance now — the keycap tile
+          beside it was removed. Ctrl+K still opens the palette for anyone who
+          knows it. %>
+      <button type="button" id="accountChip" class="account-chip"
+              aria-haspopup="dialog" aria-expanded="false"
+              aria-keyshortcuts="Control+K" title="Quick Jump (Ctrl + K)">
+        <span class="account-avatar" aria-hidden="true"><%= accountInitials %></span>
+        <span class="account-meta">
+          <span class="account-name"><%= user.full_name %></span>
+          <span class="account-role"><%= user.role %></span>
+        </span>
+        <span class="account-caret" aria-hidden="true">&#9662;</span>
+      </button>
+    </div>
+
+    <div id="jumpPalette" class="palette-backdrop hidden" role="dialog" aria-modal="true" aria-label="Quick Jump">
+      <div class="palette" id="jumpPaletteCard">
+        <div class="palette-head">
+          <span class="palette-title">Quick Jump</span>
+          <span class="text-[11px] text-white/60"><span class="kbd">Esc</span> to close</span>
+        </div>
+        <input type="text" id="jumpInput" class="palette-input" autocomplete="off"
+               spellcheck="false" placeholder="Type a screen name... (pos, reports, stock)" />
+        <div id="jumpList" class="palette-list"></div>
+        <p id="jumpEmpty" class="palette-empty hidden">No screen matches that.</p>
+        <div class="palette-foot">
+          <span><span class="kbd">&#8593;</span> <span class="kbd">&#8595;</span> move</span>
+          <span><span class="kbd">&#8629;</span> open</span>
+          <span><span class="kbd">Esc</span> close</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.PAPA_JUMP_TARGETS = <%- JSON.stringify(jumpTargets) %>;
+    </script>
+    <%# smart-search gives the palette the same typo tolerance the POS grid has.
+        Pages that load it again at the bottom are unaffected — it is a plain
+        UMD module and re-running it just re-assigns window.PapaSearch. %>
+    <script src="/js/smart-search.js?v=<%= locals.assetVersion || 0 %>"></script>
+    <script src="/js/quick-jump.js?v=<%= locals.assetVersion || 0 %>"></script>
+  <% } %>
+</header>

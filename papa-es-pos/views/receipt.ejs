@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= (sale.status === 'OPEN' || locals.isKitchen) ? 'Kitchen Slip - ' + (sale.table_number || sale.or_number) : 'Receipt ' + sale.or_number %></title>
+  <%
+    const isKitchenSlip = (sale.status === 'OPEN') || (typeof isKitchen !== 'undefined' && isKitchen);
+    const peso = (value) => Number(value || 0).toFixed(2);
+    const paperWidth = width === '58' ? '58mm' : '80mm';
+    const slipWidth = width === '58' ? '50mm' : '72mm';
+    const discountLabel = (type, value) => {
+      const kind = String(type || 'NONE').toUpperCase();
+      if (kind === 'SENIOR') return 'LESS SENIOR 20%';
+      if (kind === 'PWD') return 'LESS PWD 20%';
+      if (kind === 'EMPLOYEE') return `LESS EMPLOYEE ${Number(value || 0) || 10}%`;
+      if (kind === 'PERCENT') return `LESS ${Number(value || 0)}%`;
+      if (kind === 'AMOUNT') return 'LESS (AMOUNT)';
+      return 'LESS DISCOUNT';
+    };
+
+    const cashGiven = Number(sale.cash_received || 0);
+    const totalDue = Number(sale.total_amount || 0);
+    const dynamicChange = sale.payment_method === 'CASH'
+      ? Math.max(0, cashGiven - totalDue)
+      : Number(sale.change_amount || 0);
+  %>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper-w: <%= paperWidth %>;
+      --slip-w: <%= slipWidth %>;
+    }
+    * { 
+      box-sizing: border-box; 
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      margin: 0;
+      padding: 24px 12px;
+      background: #1f2937;
+      font-family: "Courier New", Courier, monospace;
+      color: #111;
+    }
+    .toolbar {
+      max-width: 420px; 
+      margin: 0 auto 16px; 
+      display: flex; 
+      flex-wrap: wrap;
+      gap: 8px; 
+      justify-content: center;
+    }
+    .toolbar a, .toolbar button {
+      font-family: system-ui, sans-serif; 
+      font-size: 13px; 
+      cursor: pointer;
+      border: 0; 
+      border-radius: 6px; 
+      padding: 8px 14px; 
+      text-decoration: none;
+      background: rgba(255,255,255,0.12); 
+      color: #fff;
+    }
+    .toolbar .primary { background: #D4AF37; color: #000; font-weight: 700; }
+    .toolbar .active { outline: 2px solid #D4AF37; }
+    
+    .slip {
+      width: var(--slip-w);
+      max-width: var(--slip-w);
+      margin: 0 auto;
+      background: #fff;
+      padding: 4mm 2mm;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .logo { 
+      display: block; 
+      margin: 0 auto 4px; 
+      max-width: 60%; 
+      filter: grayscale(100%) contrast(140%); 
+    }
+    .center { text-align: center; }
+    .bold { font-weight: 700; }
+    .small { font-size: 10px; }
+    .rule { border-top: 1px dashed #000; margin: 4px 0; }
+    .row { display: flex; justify-content: space-between; gap: 6px; }
+    .row .amt { white-space: nowrap; }
+    .item-name { word-break: break-word; }
+    .indent { padding-left: 8px; }
+    .voided { text-decoration: line-through; opacity: 0.65; }
+    .total-row { font-size: 13px; font-weight: 700; }
+    .badge-bar {
+      background: #000 !important;
+      color: #fff !important;
+      text-align: center;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      padding: 3px 0;
+      margin-bottom: 4px;
+    }
+    .note-box {
+      font-size: 10px;
+      margin-top: 2px;
+      padding: 4px;
+      border: 1px dashed #000;
+      word-break: break-word;
+    }
+
+    @page { 
+      size: auto; 
+      margin: 0; 
+    }
+    @media print {
+      html, body { 
+        background: #fff !important; 
+        padding: 0 !important; 
+        margin: 0 !important;
+      }
+      .toolbar { 
+        display: none !important; 
+      }
+      .slip { 
+        width: var(--slip-w) !important;
+        max-width: var(--slip-w) !important;
+        margin: 0 auto !important; 
+        padding: 2mm 1mm !important; 
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="primary" onclick="window.print()">Print <%= isKitchenSlip ? 'Kitchen Slip' : 'Receipt' %></button>
+    <a href="/receipt/<%= sale.id %>?width=58<%= isKitchenSlip ? '&type=kitchen' : '' %>" class="<%= width === '58' ? 'active' : '' %>">58 mm</a>
+    <a href="/receipt/<%= sale.id %>?width=80<%= isKitchenSlip ? '&type=kitchen' : '' %>" class="<%= width === '80' ? 'active' : '' %>">80 mm</a>
+    <a href="/pos">Back to POS</a>
+    <a href="/reports?panel=receipts">Receipt History</a>
+  </div>
+
+  <div class="slip">
+    <% if (isKitchenSlip) { %>
+      <div class="badge-bar">KITCHEN PREP SLIP</div>
+    <% } else { %>
+      <img src="/img/PapaEs_Logo.png" alt="Papa Es" class="logo" />
+      <div class="center bold"><%= store.name || 'Papa Es Diner' %></div>
+      <% if (store.address) { %><div class="center small"><%= store.address %></div><% } %>
+      <% if (store.contact) { %><div class="center small"><%= store.contact %></div><% } %>
+      <% if (store.tin) { %><div class="center small">TIN: <%= store.tin %> (Non-VAT)</div><% } %>
+      <% if (sale.status === 'VOIDED') { %>
+        <div class="center bold small" style="border: 1px solid #000; margin: 4px 0; padding: 2px;">*** VOIDED SALE ***</div>
+      <% } %>
+    <% } %>
+
+    <%# Shared Header Metadata %>
+    <div class="rule"></div>
+    <div class="row small"><span>Order No.</span><span class="bold"><%= sale.or_number %></span></div>
+    <% if (sale.table_number || isKitchenSlip) { %>
+      <div class="row small"><span>Table</span><span class="bold"><%= sale.table_number || ('TAB-' + sale.id) %></span></div>
+    <% } %>
+    <div class="row small"><span>Date</span><span><%= sale.created_at_local %></span></div>
+    <div class="row small"><span>Cashier</span><span><%= sale.cashier_name %></span></div>
+    <div class="row small"><span>Type</span><span class="bold"><%= String(sale.order_type).replace('_', ' ') %></span></div>
+    <div class="rule"></div>
+
+    <%# Line Items Loop %>
+    <% 
+      let activeDishCount = 0;
+      items.forEach(line => {
+        const activeQty = Number(line.quantity) - Number(line.voided_qty);
+        const fullyVoided = activeQty <= 0;
+        if (!fullyVoided) activeDishCount += activeQty;
+    %>
+      <% if (isKitchenSlip) { %>
+        <% if (!fullyVoided) { %>
+          <div class="item-name bold"><%= line.display_name %></div>
+          <div class="row">
+            <span>PREP</span>
+            <span class="amt bold"><%= activeQty %>x</span>
+          </div>
+        <% } %>
+      <% } else { %>
+        <div class="item-name <%= fullyVoided ? 'voided' : '' %>"><%= line.display_name %></div>
+        <div class="row <%= fullyVoided ? 'voided' : '' %>">
+          <span><%= activeQty > 0 ? activeQty : line.quantity %> x <%= peso(line.unit_price) %></span>
+          <span class="amt"><%= peso(line.gross_amount) %></span>
+        </div>
+        <% if (Number(line.voided_qty) > 0) { %>
+          <div class="row small indent"><span>VOID <%= line.voided_qty %> pc(s)</span><span class="amt">—</span></div>
+        <% } %>
+        <% if (Number(line.discount_amount) > 0) { %>
+          <div class="row small indent">
+            <span><%= discountLabel(line.discount_type, line.discount_value) %></span>
+            <span class="amt">-<%= peso(line.discount_amount) %></span>
+          </div>
+        <% } %>
+      <% } %>
+    <% }) %>
+
+    <%# Kitchen Slip Bottom %>
+    <% if (isKitchenSlip) { %>
+      <% if (sale.order_note) { %>
+        <div class="rule"></div>
+        <div class="bold small">Special Instructions:</div>
+        <div class="note-box"><%= sale.order_note %></div>
+      <% } %>
+      <div class="rule"></div>
+      <div class="row small"><span>Total items to prepare</span><span class="bold"><%= activeDishCount %></span></div>
+      <div class="badge-bar" style="margin-top: 6px; font-size: 10px;">FOR KITCHEN USE ONLY</div>
+      <div class="center small" style="margin-top:4px;">.</div>
+
+    <%# Financial & Payment Receipt Bottom %>
+    <% } else { %>
+      <div class="rule"></div>
+      <div class="row"><span>Subtotal</span><span class="amt"><%= peso(sale.subtotal_amount) %></span></div>
+      <% if (Number(sale.line_discount_total) > 0) { %>
+        <div class="row"><span>Item Discounts</span><span class="amt">-<%= peso(sale.line_discount_total) %></span></div>
+      <% } %>
+      <% if (Number(sale.order_discount_amount) > 0) { %>
+        <div class="row">
+          <span><%= discountLabel(sale.discount_type, sale.discount_value) %></span>
+          <span class="amt">-<%= peso(sale.order_discount_amount) %></span>
+        </div>
+      <% } %>
+      <div class="rule"></div>
+      <div class="row total-row"><span>TOTAL AMOUNT</span><span class="amt"><%= peso(sale.total_amount) %></span></div>
+      <div class="rule"></div>
+
+      <div class="row"><span>Payment</span><span><%= sale.payment_method %></span></div>
+      <% if (sale.payment_method === 'CASH') { %>
+        <div class="row"><span>Cash</span><span class="amt"><%= peso(sale.cash_received) %></span></div>
+        <div class="row"><span>Change</span><span class="amt"><%= peso(dynamicChange) %></span></div>
+      <% } else if (sale.payment_ref) { %>
+        <div class="row small"><span>Ref</span><span><%= sale.payment_ref %></span></div>
+      <% } %>
+      <% if (sale.order_note) { %>
+        <div class="rule"></div>
+        <div class="small">Note: <%= sale.order_note %></div>
+      <% } %>
+
+      <% if (sale.discount_id_name || sale.discount_id_number) { %>
+        <div class="rule"></div>
+        <div class="small">Cardholder: <%= sale.discount_id_name || '________________________' %></div>
+        <div class="small">ID No.: <%= sale.discount_id_number || '________________________' %></div>
+        <div class="small" style="margin-top:8px;">Signature: ______________________</div>
+      <% } %>
+
+      <% if (sale.status === 'VOIDED') { %>
+        <div class="rule"></div>
+        <div class="small">Voided by: <%= sale.voided_by_name || '—' %></div>
+        <% if (sale.cancel_reason) { %><div class="small">Reason: <%= sale.cancel_reason %></div><% } %>
+      <% } %>
+
+      <div class="rule"></div>
+      <div class="center small">Items sold: <%= items.length %></div>
+      <div class="center bold" style="margin-top:6px;">Thank you for dining with us!</div>
+      <div class="center small" style="margin-top:4px;">.</div>
+    <% } %>
+  </div>
+
+  <script>
+    (function () {
+      <% if (locals.autoprint) { %>
+        var printed = false;
+        window.addEventListener('load', function () {
+          if (printed) return;
+          printed = true;
+          window.setTimeout(function () {
+            window.print();
+          }, 300);
+        });
+      <% } %>
+    })();
+  </script>
+</body>
+</html>

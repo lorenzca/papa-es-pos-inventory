@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>POS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { papaRed: '#8B0000', papaGold: '#D4AF37' }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="text-white p-3 md:p-4 bg-slate-900 min-h-screen flex flex-col pb-20 lg:pb-3">
+  <%- include('partials/header', { user, pageTitle: 'Point of Sale' }) %>
+
+  <nav class="mb-3 flex flex-wrap gap-2 text-sm">
+    <% if (user && ['OWNER','MANAGER'].includes(user.role)) { %>
+      <a href="/dashboard" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20">Dashboard</a>
+      <a href="/reports" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20">Reports</a>
+    <% } %>
+    <a href="/logout" class="px-3 py-1.5 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
+  </nav>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 lg:h-[calc(100vh-140px)] items-start">
+    <%
+      const groupOf = (row) => String(row.parent_group || row.category || 'Others').trim() || 'Others';
+      const subOf = (row) => String(row.sub_category || '').trim();
+      const initialsOf = (name) => String(name || '?')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0].toUpperCase())
+        .join('') || '?';
+      const groups = [];
+      const subsByGroup = {};
+      items.forEach((row) => {
+        const group = groupOf(row);
+        if (!groups.includes(group)) { groups.push(group); subsByGroup[group] = []; }
+        const sub = subOf(row);
+        if (sub && !subsByGroup[group].includes(sub)) subsByGroup[group].push(sub);
+      });
+    %>
+    
+    <%# Left Menu Section %>
+    <section class="lg:col-span-7 flex flex-col gap-3 lg:h-full lg:overflow-hidden">
+      <div class="card-panel p-3 space-y-2.5 shrink-0">
+        <div class="flex items-center gap-2">
+          <input type="text" id="searchInput" oninput="filterMenuItems()" autocomplete="off"
+                 placeholder="Search menu"
+                 class="flex-1 bg-slate-800 text-white border border-slate-700 focus:border-papaGold focus:outline-none p-2.5 rounded text-sm" />
+          <button type="button" onclick="clearMenuSearch()"
+                  class="px-3 py-2.5 rounded bg-white/10 hover:bg-white/20 text-xs">Clear</button>
+        </div>
+
+        <div id="parentGroupBar" class="flex flex-wrap gap-1.5">
+          <button type="button" class="tab-btn is-active" data-parent="ALL">All Items</button>
+          <% groups.forEach((group) => { %>
+            <button type="button" class="tab-btn" data-parent="<%= group %>"><%= group %></button>
+          <% }) %>
+        </div>
+        <div id="subCategoryBar" class="flex flex-wrap gap-1.5 hidden"></div>
+      </div>
+
+      <div class="lg:flex-1 lg:overflow-y-auto pr-1">
+        <div id="menuGrid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 pb-3">
+          <% items.forEach((row) => { %>
+            <button type="button"
+                    class="menu-card text-left p-2.5 rounded-lg"
+                    data-id="<%= row.id %>"
+                    data-name="<%= row.item_name %>"
+                    data-price="<%= Number(row.sell_price) %>"
+                    data-raw-parent="<%= groupOf(row) %>"
+                    data-sub="<%= subOf(row) %>"
+                    data-search="<%= row.item_name %> | <%= groupOf(row) %> <%= subOf(row) %> <%= row.category || '' %>">
+              <span class="card-thumb">
+                <span class="card-thumb-fallback"><%= initialsOf(row.item_name) %></span>
+                <% if (row.image_url) { %>
+                  <img src="<%= row.image_url %>" alt="" loading="lazy" onerror="this.remove()" />
+                <% } %>
+              </span>
+              <span class="block font-semibold text-xs sm:text-sm leading-tight mt-1 line-clamp-2"><%= row.item_name %></span>
+              <span class="block text-[11px] text-white/60 mt-0.5 truncate"><%= subOf(row) || groupOf(row) %></span>
+              <span class="block text-papaGold font-bold text-xs sm:text-sm mt-1">₱<%= Number(row.sell_price).toFixed(2) %></span>
+            </button>
+          <% }) %>
+        </div>
+        <p id="menuEmpty" class="hidden card-panel p-4 text-sm text-white/60">No menu item matches that search.</p>
+      </div>
+    </section>
+    
+    <%# Right Cart & Payment Section: Drawer on Mobile, Column on lg screens %>
+    <section id="cartDrawer" class="hidden fixed inset-0 z-50 bg-slate-900 p-4 flex flex-col gap-2.5 overflow-y-auto lg:static lg:flex lg:col-span-5 lg:z-auto lg:h-full lg:overflow-y-auto lg:p-3 card-panel">
+      
+      <%# Close Drawer Header Bar (Phone only) %>
+      <div class="flex items-center justify-between pb-2 border-b border-slate-700 lg:hidden shrink-0">
+        <button type="button" onclick="toggleMobileCart()" class="text-xs px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white font-semibold">
+          ← Back to Menu
+        </button>
+        <span class="text-sm font-bold text-papaGold">Order & Payment</span>
+      </div>
+
+      <div class="flex items-start justify-between gap-2 shrink-0">
+        <div>
+          <h2 class="text-lg font-semibold text-papaGold">Current Order</h2>
+          <p class="text-[11px] text-white/60">Tap a dish to add. Tap − / + to adjust.</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" id="activeTablesBtn" onclick="openActiveTablesModal()"
+                  class="relative px-2.5 py-1.5 rounded bg-papaGold/20 text-papaGold border border-papaGold/40 hover:bg-papaGold/30 text-xs font-semibold">
+            Tables
+            <span id="activeTablesBadge"
+                  class="hidden absolute -top-2 -right-2 min-w-[18px] px-1 py-0.5 rounded-full bg-papaGold text-black text-[10px] font-bold text-center">0</span>
+          </button>
+
+          <button type="button" id="approvalsBtn" onclick="openApprovals()"
+                  class="relative px-2.5 py-1.5 rounded bg-white/10 hover:bg-white/20 text-xs">
+            Voids
+            <span id="pendingVoidBadge"
+                  class="hidden absolute -top-2 -right-2 min-w-[18px] px-1 py-0.5 rounded-full bg-papaRed text-[10px] font-bold text-center">0</span>
+          </button>
+        </div>
+      </div>
+
+      <%# loaded table indicator %>
+      <div id="loadedTableBanner" class="hidden flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded p-1.5 text-xs shrink-0">
+        <span class="text-amber-400 font-semibold" id="loadedTableLabel">Tab: Table 1</span>
+        <button type="button" onclick="detachActiveTable()" class="text-white/60 hover:text-white underline">New Tab</button>
+      </div>
+
+      <%# order type & table selection %>
+      <div class="space-y-1.5 shrink-0">
+        <div>
+          <p class="text-[11px] uppercase tracking-wide text-white/50 mb-1">Order Type</p>
+          <div id="orderTypeGroup" class="grid grid-cols-3 gap-1.5">
+            <button type="button" class="seg-btn is-active py-1.5 text-xs" data-order-type="DINE_IN">Dine In</button>
+            <button type="button" class="seg-btn py-1.5 text-xs" data-order-type="TAKEOUT">Takeout</button>
+            <button type="button" class="seg-btn py-1.5 text-xs" data-order-type="DELIVERY">Delivery</button>
+          </div>
+        </div>
+
+        <div id="tableSelectContainer" class="flex items-center gap-2">
+          <label for="tableNumberSelect" class="text-[11px] uppercase tracking-wide text-white/50 whitespace-nowrap">Table #:</label>
+          <select id="tableNumberSelect" class="flex-1 bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:border-papaGold focus:outline-none">
+            <option value="">Select Table</option>
+            <% for(let t = 1; t <= 20; t++) { %>
+              <option value="Table <%= t %>">Table <%= t %></option>
+            <% } %>
+          </select>
+        </div>
+      </div>
+
+      <%# Cart items %>
+      <div class="shrink-0">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[11px] uppercase tracking-wide text-white/50">Items</p>
+          <button type="button" id="clearOrderBtn" onclick="clearOrder()"
+                  class="text-[11px] px-2 py-0.5 rounded bg-white/10 hover:bg-white/20">Clear</button>
+        </div>
+        <div id="cartList" class="space-y-1.5 max-h-40 sm:max-h-48 overflow-y-auto pr-1"></div>
+        <p id="cartEmpty" class="text-xs text-white/50 py-3 text-center border border-dashed border-slate-700 rounded">
+          No items yet — tap a menu card on the left.
+        </p>
+      </div>
+
+      <%# Order discounts %>
+      <div class="shrink-0">
+        <p class="text-[11px] uppercase tracking-wide text-white/50 mb-1">Order Discount</p>
+        <div id="orderDiscountGroup" class="grid grid-cols-3 gap-1">
+          <button type="button" class="seg-btn is-active py-1 text-xs" data-discount-type="NONE">None</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-discount-type="SENIOR">Senior 20%</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-discount-type="PWD">PWD 20%</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-discount-type="EMPLOYEE">Employee 10%</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-discount-type="PERCENT">% Off</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-discount-type="AMOUNT">₱ Off</button>
+        </div>
+        <div id="orderDiscountValueRow" class="hidden mt-1.5 flex items-center gap-2">
+          <button type="button" class="step-btn" data-order-discount-step="-1">−</button>
+          <input type="number" id="orderDiscountValue" min="0" step="1" value="0"
+                 class="flex-1 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-sm font-bold" />
+          <button type="button" class="step-btn" data-order-discount-step="1">+</button>
+          <span id="orderDiscountUnit" class="text-xs text-white/60 w-5 text-center">%</span>
+        </div>
+        <div id="discountIdRow" class="hidden mt-1.5 grid grid-cols-2 gap-1.5">
+          <input type="text" id="discountIdName" maxlength="120" placeholder="Cardholder name"
+                 class="bg-slate-800 border border-slate-700 rounded p-1.5 text-xs" />
+          <input type="text" id="discountIdNumber" maxlength="60" placeholder="ID / booklet no."
+                 class="bg-slate-800 border border-slate-700 rounded p-1.5 text-xs" />
+        </div>
+      </div>
+
+      <input type="text" id="orderNote" maxlength="255" placeholder="Order note / requests (optional)"
+             class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs shrink-0" />
+
+      <%# Totals %>
+      <div class="border-t border-slate-700 pt-2 space-y-0.5 text-xs shrink-0">
+        <div class="flex justify-between"><span class="text-white/70">Subtotal</span><span id="subtotalAmount">₱0.00</span></div>
+        <div class="flex justify-between hidden" id="vatRemovedRow">
+          <span class="text-white/70">Less VAT (exempt sale)</span><span id="vatRemovedAmount">−₱0.00</span>
+        </div>
+        <div class="flex justify-between" id="lineDiscountRow">
+          <span class="text-white/70">Item discounts</span><span id="lineDiscountAmount">−₱0.00</span>
+        </div>
+        <div class="flex justify-between" id="orderDiscountRow">
+          <span class="text-white/70" id="orderDiscountLabel">Order discount</span><span id="discountAmount">−₱0.00</span>
+        </div>
+        <div class="flex justify-between text-base font-bold text-papaGold border-t border-slate-700 pt-1.5 mt-1">
+          <span>TOTAL</span><span id="totalAmount">₱0.00</span>
+        </div>
+        
+        <div class="hidden">
+          <span id="vatableSales">₱0.00</span>
+          <span id="vatAmount">₱0.00</span>
+          <span id="vatExemptSales">₱0.00</span>
+        </div>
+      </div>
+
+      <%# Payment Method selector %>
+      <div class="shrink-0">
+        <p class="text-[11px] uppercase tracking-wide text-white/50 mb-1">Payment</p>
+        <div id="paymentGroup" class="grid grid-cols-4 gap-1">
+          <button type="button" class="seg-btn is-active py-1 text-xs" data-payment="CASH">Cash</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-payment="GCASH">GCash</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-payment="MAYA">Maya</button>
+          <button type="button" class="seg-btn py-1 text-xs" data-payment="CARD">Card</button>
+        </div>
+      </div>
+
+      <%# Cash Input %>
+      <div id="cashSection" class="space-y-1.5 shrink-0">
+        <div class="flex items-center gap-1.5">
+          <input type="text" id="cashReceived" readonly inputmode="none" placeholder="0.00"
+                 class="flex-1 bg-slate-800 border border-slate-700 rounded p-2 text-right text-lg font-bold" />
+          <button type="button" onclick="cashBackspace()" class="step-btn">⌫</button>
+        </div>
+        <div id="quickCashButtons" class="grid grid-cols-4 gap-1"></div>
+        <div class="grid grid-cols-3 gap-1">
+          <% ['1','2','3','4','5','6','7','8','9','0','00','.'].forEach((key) => { %>
+            <button type="button" class="pad-btn py-1.5 text-xs font-bold" onclick="cashKey('<%= key %>')"><%= key %></button>
+          <% }) %>
+        </div>
+        <div class="flex justify-between text-xs pt-0.5">
+          <span class="text-white/70">Change</span><span id="changeAmount" class="font-bold text-sm">₱0.00</span>
+        </div>
+      </div>
+
+      <%# GCash / Maya %>
+      <div id="digitalSection" class="hidden space-y-1.5 shrink-0">
+        <div class="qr-frame h-32">
+          <img id="qrImage" src="" alt="" class="hidden w-full h-full object-contain rounded" />
+          <div id="qrPlaceholder" class="text-center text-xs text-white/50 px-2 py-3">
+            <p class="text-2xl mb-0.5">▣</p>
+            <p><span id="qrMethodLabel">GCash</span> QR code goes here</p>
+            <p class="mt-0.5 text-white/35 text-[10px]">Save as <code id="qrPath">/img/qr/gcash.png</code></p>
+          </div>
+        </div>
+        <input type="text" id="paymentRef" maxlength="60" placeholder="Reference no. (optional)"
+               class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs" />
+      </div>
+
+      <%# Card Terminal %>
+      <div id="cardSection" class="hidden space-y-1.5 shrink-0">
+        <div class="border border-slate-700 rounded p-2.5 text-center">
+          <p class="text-2xl mb-0.5">💳</p>
+          <p class="font-semibold text-xs">Tap to Pay / Swipe</p>
+          <p class="text-[10px] text-white/50">Use card terminal, then mark as paid.</p>
+        </div>
+        <input type="text" id="cardRef" maxlength="60" placeholder="Approval code (optional)"
+               class="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs" />
+      </div>
+
+      <div id="confirmRow" class="hidden flex items-center gap-1.5 shrink-0">
+        <span id="paymentStatusPill" class="pill pill-pending text-xs py-1">Pending</span>
+        <button type="button" id="confirmPaymentBtn" onclick="togglePaymentConfirmed()"
+                class="flex-1 bg-papaGold text-black font-bold py-2 rounded text-xs hover:bg-yellow-500">
+          Mark as Paid
+        </button>
+      </div>
+
+      <%# Settle Action Buttons %>
+      <div class="grid grid-cols-2 gap-2 pt-1 shrink-0">
+        <button type="button" id="holdOrderBtn" onclick="holdOrderToKitchen()"
+                class="w-full bg-slate-800 hover:bg-slate-700 text-papaGold border border-papaGold/50 font-bold py-2.5 rounded text-xs sm:text-sm transition">
+          Hold Tab
+        </button>
+        <button type="button" id="completeOrderBtn" onclick="completeOrder()"
+                class="w-full bg-papaRed hover:bg-red-800 text-white font-bold py-2.5 rounded text-xs sm:text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">
+          Complete Order
+        </button>
+      </div>
+      <p id="result" class="text-xs shrink-0"></p>
+    </section>
+  </div>
+
+  <%# Sticky Floating Mobile Cart Bar (visible only on mobile) %>
+  <div id="mobileCartBar" onclick="toggleMobileCart()" 
+       class="lg:hidden fixed bottom-3 left-3 right-3 z-40 bg-papaGold text-black font-bold px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between cursor-pointer border border-yellow-300 active:scale-[0.98] transition">
+    <div class="flex items-center gap-2">
+      <span id="mobileCartBadge" class="bg-black text-white text-xs px-2 py-0.5 rounded-full">0</span>
+      <span class="text-sm font-semibold">View Order</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="mobileCartTotal" class="text-sm font-bold">₱0.00</span>
+      <span class="text-xs">➔</span>
+    </div>
+  </div>
+
+  <%# Active Tables Modal %>
+  <div id="activeTablesModal" class="modal-backdrop hidden">
+    <div class="card-panel p-4 w-full max-w-lg space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-papaGold">Active Dining Tables</h3>
+        <button type="button" onclick="closeActiveTablesModal()" class="px-3 py-1 rounded bg-white/10 hover:bg-white/20 text-sm">Close</button>
+      </div>
+      <p class="text-xs text-white/50">Select an occupied table to view, add items, or settle bill.</p>
+      <div id="activeTablesList" class="space-y-2 max-h-[55vh] overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <%# Line Discount Modal %>
+  <div id="lineDiscountModal" class="modal-backdrop hidden">
+    <div class="card-panel p-4 w-full max-w-sm space-y-3">
+      <h3 class="text-lg font-semibold text-papaGold">Line Discount</h3>
+      <p id="lineDiscountItem" class="text-sm text-white/70"></p>
+      <div id="lineDiscountGroup" class="grid grid-cols-3 gap-2">
+        <button type="button" class="seg-btn is-active" data-line-discount="NONE">None</button>
+        <button type="button" class="seg-btn" data-line-discount="SENIOR">Senior 20%</button>
+        <button type="button" class="seg-btn" data-line-discount="PWD">PWD 20%</button>
+        <button type="button" class="seg-btn" data-line-discount="EMPLOYEE">Employee 10%</button>
+        <button type="button" class="seg-btn" data-line-discount="PERCENT">% Off</button>
+        <button type="button" class="seg-btn" data-line-discount="AMOUNT">₱ Off</button>
+      </div>
+      <div id="lineDiscountValueRow" class="hidden flex items-center gap-2">
+        <button type="button" class="step-btn" data-line-discount-step="-1">−</button>
+        <input type="number" id="lineDiscountValue" min="0" step="1" value="0"
+               class="flex-1 bg-slate-800 border border-slate-700 rounded p-2 text-center text-lg font-bold" />
+        <button type="button" class="step-btn" data-line-discount-step="1">+</button>
+        <span id="lineDiscountUnit" class="text-sm text-white/60 w-6 text-center">%</span>
+      </div>
+      <p id="lineDiscountPreview" class="text-sm text-white/70"></p>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeLineDiscount()" class="flex-1 py-3 rounded bg-white/10 hover:bg-white/20">Cancel</button>
+        <button type="button" onclick="applyLineDiscount()" class="flex-1 py-3 rounded bg-papaGold text-black font-bold">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <%# Void Request Modal %>
+  <div id="voidModal" class="modal-backdrop hidden">
+    <div class="card-panel p-4 w-full max-w-sm space-y-3">
+      <h3 class="text-lg font-semibold text-papaGold">Void Item</h3>
+      <p id="voidItemLabel" class="text-sm text-white/70"></p>
+      <div>
+        <p class="text-xs uppercase tracking-wide text-white/50 mb-1">Quantity to void</p>
+        <div class="flex items-center gap-2">
+          <button type="button" class="step-btn" data-void-step="-1">−</button>
+          <input type="number" id="voidQty" min="1" step="1" value="1" readonly
+                 class="flex-1 bg-slate-800 border border-slate-700 rounded p-2 text-center text-lg font-bold" />
+          <button type="button" class="step-btn" data-void-step="1">+</button>
+        </div>
+      </div>
+      <div>
+        <p class="text-xs uppercase tracking-wide text-white/50 mb-1">Reason</p>
+        <div id="voidReasonGroup" class="grid grid-cols-2 gap-2">
+          <button type="button" class="seg-btn" data-void-reason="Wrong order keyed">Wrong order</button>
+          <button type="button" class="seg-btn" data-void-reason="Customer changed mind">Changed mind</button>
+          <button type="button" class="seg-btn" data-void-reason="Item unavailable">Unavailable</button>
+          <button type="button" class="seg-btn" data-void-reason="Spillage / remake">Spillage</button>
+        </div>
+        <input type="text" id="voidReason" maxlength="255" placeholder="Reason (required, min 3 characters)"
+               class="w-full mt-2 bg-slate-800 border border-slate-700 rounded p-2 text-sm" />
+      </div>
+      <p id="voidNotice" class="text-xs text-white/50">A manager or owner must key their PIN to authorize this void.</p>
+      <p id="voidError" class="text-sm text-red-300"></p>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeVoidModal()" class="flex-1 py-3 rounded bg-white/10 hover:bg-white/20">Cancel</button>
+        <button type="button" id="voidSubmitBtn" onclick="submitVoidRequest()"
+                class="flex-1 py-3 rounded bg-papaRed font-bold hover:bg-red-800">Request Void</button>
+      </div>
+    </div>
+  </div>
+
+  <%# Manager PIN Modal %>
+  <div id="pinModal" class="modal-backdrop modal-backdrop-top hidden">
+    <div class="card-panel p-4 w-full max-w-sm space-y-3">
+      <h3 class="text-lg font-semibold text-papaGold">Manager Authorization</h3>
+      <p id="pinRequestLabel" class="text-sm text-white/70"></p>
+
+      <div>
+        <label for="pinAuthorizerSelect" class="block text-xs uppercase tracking-wide text-white/50 mb-1">Authorizer</label>
+        <select id="pinAuthorizerSelect" class="w-full bg-slate-800 border border-slate-700 rounded p-2.5 text-sm text-white focus:border-papaGold focus:outline-none">
+          <option value="">Select Authorizer</option>
+        </select>
+      </div>
+
+      <input type="password" id="pinInput" inputmode="numeric" autocomplete="off" maxlength="6" readonly
+             placeholder="••••"
+             class="w-full bg-slate-800 border border-slate-700 rounded p-3 text-center text-3xl tracking-[0.5em]" />
+
+      <div class="grid grid-cols-3 gap-2">
+        <% ['1','2','3','4','5','6','7','8','9'].forEach((key) => { %>
+          <button type="button" class="pad-btn" onclick="pinKey('<%= key %>')"><%= key %></button>
+        <% }) %>
+        <button type="button" class="pad-btn" onclick="pinClear()">Clr</button>
+        <button type="button" class="pad-btn" onclick="pinKey('0')">0</button>
+        <button type="button" class="pad-btn" onclick="pinBackspace()">⌫</button>
+      </div>
+
+      <p id="pinError" class="text-sm text-red-300"></p>
+
+      <div class="flex gap-2">
+        <button type="button" onclick="closePinModal()" class="flex-1 py-3 rounded bg-white/10 hover:bg-white/20">Cancel</button>
+        <button type="button" onclick="decideVoid('REJECTED')" class="flex-1 py-3 rounded bg-white/10 hover:bg-white/20">Reject</button>
+        <button type="button" onclick="decideVoid('APPROVED')" class="flex-1 py-3 rounded bg-papaGold text-black font-bold">Approve</button>
+      </div>
+    </div>
+  </div>
+
+  <%# Approvals Modal %>
+  <div id="approvalsModal" class="modal-backdrop hidden">
+    <div class="card-panel p-4 w-full max-w-lg space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-papaGold">Void Approvals</h3>
+        <button type="button" onclick="closeApprovals()" class="px-3 py-1 rounded bg-white/10 hover:bg-white/20 text-sm">Close</button>
+      </div>
+      <p class="text-xs text-white/50">Every request below is waiting for a manager or owner PIN.</p>
+      <div id="approvalsList" class="space-y-2 max-h-[55vh] overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <script>
+    window.POS_CONTEXT = {
+      canAuthorizeVoids: <%= canAuthorizeVoids ? 'true' : 'false' %>,
+      pendingVoidCount: <%= Number(pendingVoidCount) || 0 %>,
+      userRole: '<%= user.role %>'
+    };
+  </script>
+  <script src="/js/pricing.js?v=<%= locals.assetVersion || 0 %>"></script>
+  <script src="/js/smart-search.js?v=<%= locals.assetVersion || 0 %>"></script>
+  <script src="/js/pos.js?v=<%= locals.assetVersion || 0 %>"></script>
+  <script>
+    const SUBS_BY_GROUP = <%- JSON.stringify(subsByGroup) %>;
+    let activeParent = 'ALL';
+    let activeSub = 'ALL';
+
+    function markActive(container, attribute, value) {
+      container.querySelectorAll('[' + attribute + ']').forEach((button) => {
+        button.classList.toggle('is-active', button.getAttribute(attribute) === value);
+      });
+    }
+
+    function renderSubCategoryBar() {
+      const bar = document.getElementById('subCategoryBar');
+      const subs = activeParent === 'ALL' ? [] : (SUBS_BY_GROUP[activeParent] || []);
+      bar.innerHTML = '';
+
+      if (!subs.length) {
+        bar.classList.add('hidden');
+        return;
+      }
+
+      bar.classList.remove('hidden');
+      const buttons = ['ALL'].concat(subs);
+      buttons.forEach((sub) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tab-btn' + (sub === activeSub ? ' is-active' : '');
+        button.setAttribute('data-sub', sub);
+        button.textContent = sub === 'ALL' ? 'All ' + activeParent : sub;
+        bar.appendChild(button);
+      });
+    }
+
+    function selectParentGroup(group) {
+      activeParent = group;
+      activeSub = 'ALL';
+      markActive(document.getElementById('parentGroupBar'), 'data-parent', group);
+      renderSubCategoryBar();
+      filterMenuItems();
+    }
+
+    function selectSubCategory(sub) {
+      activeSub = sub;
+      markActive(document.getElementById('subCategoryBar'), 'data-sub', sub);
+      filterMenuItems();
+    }
+
+    document.getElementById('parentGroupBar').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-parent]');
+      if (button) selectParentGroup(button.getAttribute('data-parent'));
+    });
+
+    document.getElementById('subCategoryBar').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-sub]');
+      if (button) selectSubCategory(button.getAttribute('data-sub'));
+    });
+
+    function inActiveCategory(card) {
+      if (activeParent !== 'ALL' && card.getAttribute('data-raw-parent') !== activeParent) return false;
+      if (activeSub !== 'ALL' && card.getAttribute('data-sub') !== activeSub) return false;
+      return true;
+    }
+
+    function filterMenuItems() {
+      const query = document.getElementById('searchInput').value;
+      const cards = Array.prototype.slice.call(document.querySelectorAll('#menuGrid .menu-card'));
+      cards.forEach((card) => card.classList.add('hidden'));
+
+      const candidates = cards.filter(inActiveCategory);
+      const shown = PapaSearch.applyToElements(query, candidates, {
+        hiddenClass: 'hidden',
+        reorder: query.trim().length > 0
+      });
+
+      document.getElementById('menuEmpty').classList.toggle('hidden', shown > 0);
+    }
+
+    function clearMenuSearch() {
+      const input = document.getElementById('searchInput');
+      input.value = '';
+      filterMenuItems();
+      input.focus();
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const first = document.querySelector('#menuGrid .menu-card:not(.hidden)');
+      if (first) first.click();
+    });
+
+    // Mobile Drawer Toggle
+    function toggleMobileCart() {
+      const drawer = document.getElementById('cartDrawer');
+      if (drawer) {
+        drawer.classList.toggle('hidden');
+      }
+    }
+
+    // Observe total element to auto-sync mobile bar badge & total
+    const totalEl = document.getElementById('totalAmount');
+    if (totalEl) {
+      const observer = new MutationObserver(() => {
+        const mobTotal = document.getElementById('mobileCartTotal');
+        const mobBadge = document.getElementById('mobileCartBadge');
+        if (mobTotal) mobTotal.textContent = totalEl.textContent;
+        const cartList = document.getElementById('cartList');
+        if (mobBadge && cartList) {
+          mobBadge.textContent = cartList.children.length;
+        }
+      });
+      observer.observe(totalEl, { childList: true, characterData: true, subtree: true });
+    }
+
+    renderSubCategoryBar();
+    filterMenuItems();
+  </script>
+</body>
+</html>

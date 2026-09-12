@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accounts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
+  <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
+</head>
+<body class="text-white p-4 md:p-6">
+  <%- include('partials/header', { user, pageTitle: 'Account Management' }) %>
+
+  <nav class="mb-4 flex flex-wrap gap-2 text-sm">
+    <a href="/dashboard" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Dashboard</a>
+    <a href="/menu" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Menu</a>
+    <a href="/reports" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Reports</a>
+    <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
+  </nav>
+
+  <% if (error) { %>
+    <div class="mb-4 bg-red-900/30 border border-red-600 text-red-200 px-3 py-2 rounded text-sm"><%= error %></div>
+  <% } %>
+  <% if (locals.success) { %>
+    <div class="mb-4 bg-green-900/30 border border-green-600 text-green-200 px-3 py-2 rounded text-sm"><%= success %></div>
+  <% } %>
+
+  <%
+    const ROLES = ['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN'];
+    // only these roles may hold a void PIN  it is what authorizes a void on
+    // the cashier's terminal.
+    const canHoldPin = (role) => ['OWNER', 'MANAGER'].includes(role);
+    const activeCount = users.filter((member) => member.is_active).length;
+  %>
+
+  <section class="card-panel p-4">
+    <div class="flex flex-wrap items-center gap-3 mb-3">
+      <div class="mr-auto">
+        <h2 class="text-lg text-papaGold font-semibold leading-tight">Staff Accounts</h2>
+        <p class="text-xs text-white/50"><%= activeCount %> active of <%= users.length %></p>
+      </div>
+      <input id="userSearch" type="text" autocomplete="off" spellcheck="false"
+             placeholder="Filter by name, username or role"
+             class="bg-slate-800 rounded px-3 py-2 text-sm w-full sm:w-64" />
+      <button type="button" id="createToggle" class="mini-btn">+ New Account</button>
+    </div>
+
+    <div id="createPanel" class="hidden mb-4 rounded-xl border border-white/10 bg-slate-900/60 p-3">
+      <form method="POST" action="/users" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <input name="full_name" required placeholder="Full name" class="bg-slate-800 rounded px-2 py-2 text-sm" />
+        <input name="username" required placeholder="Username" class="bg-slate-800 rounded px-2 py-2 text-sm" />
+        <input name="password" required minlength="6" type="password" placeholder="Temporary password" class="bg-slate-800 rounded px-2 py-2 text-sm" />
+        <select name="role" class="bg-slate-800 rounded px-2 py-2 text-sm">
+          <% ROLES.forEach((role) => { %><option value="<%= role %>"><%= role %></option><% }) %>
+        </select>
+        <button class="bg-papaGold text-black rounded px-3 py-2 text-sm font-bold">Create account</button>
+      </form>
+      <p class="text-[11px] text-white/40 mt-2">The staffer changes this password on their first shift. Void PINs are set below, per account.</p>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[560px]">
+        <thead>
+          <tr class="text-[11px] uppercase tracking-wide text-white/50">
+            <th class="text-left pb-2">Account</th>
+            <th class="text-left pb-2">Role</th>
+            <th class="text-left pb-2">Status</th>
+            <th class="text-left pb-2">Void PIN</th>
+            <th class="text-right pb-2">Manage</th>
+          </tr>
+        </thead>
+        <% users.forEach((member) => { %>
+          <tbody class="user-group border-t border-slate-700/70"
+                 data-search="<%= member.full_name %> | <%= member.username %> <%= member.role %>">
+            <tr>
+              <td class="py-2 pr-2">
+                <span class="block font-semibold leading-tight"><%= member.full_name %></span>
+                <span class="block text-xs text-white/45">@<%= member.username %></span>
+              </td>
+              <td class="py-2 pr-2 text-xs tracking-wide text-white/75"><%= member.role %></td>
+              <td class="py-2 pr-2">
+                <span class="px-2 py-0.5 rounded-full text-[11px] <%= member.is_active ? 'bg-green-900/50 text-green-300' : 'bg-red-900/40 text-red-300' %>">
+                  <%= member.is_active ? 'Active' : 'Disabled' %>
+                </span>
+              </td>
+              <td class="py-2 pr-2">
+                <% if (!canHoldPin(member.role)) { %>
+                  <span class="text-[11px] text-white/30">n/a</span>
+                <% } else if (member.has_manager_pin) { %>
+                  <span class="px-2 py-0.5 rounded-full text-[11px] bg-green-900/50 text-green-300">Set</span>
+                <% } else { %>
+                  <span class="px-2 py-0.5 rounded-full text-[11px] bg-amber-900/40 text-amber-300">Not set</span>
+                <% } %>
+              </td>
+              <td class="py-2 text-right">
+                <button type="button" class="mini-btn manage-btn" aria-expanded="false"
+                        data-target="drawer-<%= member.id %>">Manage</button>
+              </td>
+            </tr>
+            <tr id="drawer-<%= member.id %>" class="user-drawer hidden">
+              <td colspan="5" class="pb-3">
+                <div class="grid gap-3 md:grid-cols-3 rounded-xl border border-white/10 bg-slate-900/60 p-3">
+                  <form method="POST" action="/users/<%= member.id %>/update" class="space-y-2">
+                    <p class="text-[11px] uppercase tracking-wide text-white/45">Details</p>
+                    <input name="full_name" value="<%= member.full_name %>" required class="w-full bg-slate-800 rounded px-2 py-1.5" />
+                    <input name="username" value="<%= member.username %>" required class="w-full bg-slate-800 rounded px-2 py-1.5" />
+                    <select name="role" class="w-full bg-slate-800 rounded px-2 py-1.5">
+                      <% ROLES.forEach((role) => { %>
+                        <option value="<%= role %>" <%= role === member.role ? 'selected' : '' %>><%= role %></option>
+                      <% }) %>
+                    </select>
+                    <button class="mini-btn w-full">Save changes</button>
+                  </form>
+
+                  <div class="space-y-2">
+                    <p class="text-[11px] uppercase tracking-wide text-white/45">Credentials</p>
+                    <form method="POST" action="/users/<%= member.id %>/password" class="space-y-2">
+                      <input name="password" type="password" minlength="6" required placeholder="New password"
+                             class="w-full bg-slate-800 rounded px-2 py-1.5" />
+                      <button class="mini-btn w-full">Reset password</button>
+                    </form>
+                    <% if (canHoldPin(member.role)) { %>
+                      <%# This PIN is what authorizes a void on the cashier's screen. %>
+                      <form method="POST" action="/users/<%= member.id %>/pin" class="space-y-2">
+                        <input name="pin" type="password" inputmode="numeric" pattern="\d{4,6}" maxlength="6"
+                               placeholder="Void PIN (4-6 digits)" class="w-full bg-slate-800 rounded px-2 py-1.5" />
+                        <button class="mini-btn w-full"><%= member.has_manager_pin ? 'Change void PIN' : 'Set void PIN' %></button>
+                      </form>
+                      <p class="text-[11px] text-white/40">Submit it blank to revoke the PIN.</p>
+                    <% } else { %>
+                      <p class="text-[11px] text-white/40">Only owners and managers can hold a void PIN.</p>
+                    <% } %>
+                  </div>
+
+                  <div class="space-y-2">
+                    <p class="text-[11px] uppercase tracking-wide text-white/45">Access</p>
+                    <form method="POST" action="/users/<%= member.id %>/toggle">
+                      <button class="mini-btn w-full"><%= member.is_active ? 'Disable account' : 'Activate account' %></button>
+                    </form>
+                    <form method="POST" action="/users/<%= member.id %>/delete"
+                          onsubmit="return confirm('Delete this account permanently? This cannot be undone.');">
+                      <button class="mini-btn mini-btn-danger w-full">Delete permanently</button>
+                    </form>
+                    <p class="text-[11px] text-white/40">Disabling keeps the sales history; deleting is final.</p>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        <% }) %>
+        <% if (!users.length) { %>
+          <tbody><tr class="border-t border-slate-700/70"><td colspan="5" class="py-4 text-white/50">No accounts yet.</td></tr></tbody>
+        <% } %>
+      </table>
+    </div>
+
+    <p id="userEmpty" class="hidden text-sm text-white/50 py-3">No account matches that.</p>
+  </section>
+
+  <%# smart-search.js is already loaded by the header for quick jump; loading it
+      again here is harmless and keeps this page working on its own. %>
+  <script src="/js/smart-search.js?v=<%= locals.assetVersion || 0 %>"></script>
+  <script>
+    (function () {
+      var createToggle = document.getElementById('createToggle');
+      var createPanel = document.getElementById('createPanel');
+
+      if (createToggle && createPanel) {
+        createToggle.addEventListener('click', function () {
+          var opening = createPanel.classList.contains('hidden');
+          createPanel.classList.toggle('hidden', !opening);
+          createToggle.textContent = opening ? 'Close' : '+ New Account';
+          if (opening) {
+            var firstField = createPanel.querySelector('input');
+            if (firstField) firstField.focus();
+          }
+        });
+      }
+
+      // one drawer at a time: clicking manage on another account closes the
+      // previous one, so the list never grows into the cluttered wall of forms
+      // this page used to be. 
+      document.addEventListener('click', function (event) {
+        var button = event.target.closest ? event.target.closest('.manage-btn') : null;
+        if (!button) return;
+
+        var drawer = document.getElementById(button.getAttribute('data-target'));
+        if (!drawer) return;
+
+        var opening = drawer.classList.contains('hidden');
+
+        Array.prototype.forEach.call(document.querySelectorAll('.user-drawer'), function (row) {
+          row.classList.add('hidden');
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('.manage-btn'), function (other) {
+          other.setAttribute('aria-expanded', 'false');
+          other.textContent = 'Manage';
+        });
+
+        if (opening) {
+          drawer.classList.remove('hidden');
+          button.setAttribute('aria-expanded', 'true');
+          button.textContent = 'Close';
+        }
+      });
+
+      // filtering hides the whole <tbody>, which carries both the summary row
+      // and its drawer, so a filtered-out account cannot leave a form on screen.
+      var search = document.getElementById('userSearch');
+      var groups = document.querySelectorAll('tbody.user-group');
+      var emptyNote = document.getElementById('userEmpty');
+
+      if (search && groups.length && window.PapaSearch) {
+        search.addEventListener('input', function () {
+          var kept = window.PapaSearch.applyToElements(search.value, groups);
+          if (emptyNote) emptyNote.classList.toggle('hidden', kept > 0);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

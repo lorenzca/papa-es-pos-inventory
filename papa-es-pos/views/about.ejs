@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About Papa Es Diner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
+  <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
+</head>
+<body class="text-white p-4 md:p-6">
+  <%- include('partials/header', { user, pageTitle: 'About Papa Es Diner' }) %>
+
+  <nav class="mb-4 flex flex-wrap gap-2 text-sm">
+    <% if (['OWNER', 'MANAGER'].includes(user.role)) { %>
+      <a href="/dashboard" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Dashboard</a>
+    <% } %>
+    <% if (['OWNER', 'MANAGER', 'CASHIER'].includes(user.role)) { %>
+      <a href="/pos" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">POS</a>
+    <% } %>
+    <% if (['OWNER', 'MANAGER', 'KITCHEN'].includes(user.role)) { %>
+      <a href="/inventory" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Inventory</a>
+    <% } %>
+    <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
+  </nav>
+
+  <section class="card-panel p-5 mb-4">
+    <h2 class="text-xl text-papaGold font-semibold mb-2">Mission</h2>
+    <p class="text-sm leading-relaxed text-white/85">
+      To prepare and serve high quality simple food, at a great value, in a home-like
+      environment. And, to change the way people eat inspiring a shift within the
+      restaurant industry and beyond.
+    </p>
+  </section>
+
+  <section class="card-panel p-5 mb-4">
+    <h2 class="text-xl text-papaGold font-semibold mb-2">Vision</h2>
+    <p class="text-sm leading-relaxed text-white/85">
+      WE believe that the choices we make about what we eat, where it comes from and
+      how it's prepared have a direct and powerful impact on the health of individuals,
+      communities and the environment. Create more job offers and healthy workplace.
+    </p>
+  </section>
+
+  <section class="card-panel p-5">
+    <h2 class="text-xl text-papaGold font-semibold mb-3">Find Us</h2>
+
+    <div class="grid md:grid-cols-2 gap-4 text-sm">
+      <div>
+        <p class="text-xs uppercase tracking-wide text-white/50 mb-1">Address</p>
+        <p class="leading-relaxed text-white/85">
+          Mabini St., Brgy. District 1,<br />
+          Lemery, Batangas<br />
+          <span class="text-white/60"></span>
+        </p>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-white/50 mb-1">Mobile</p>
+          <a href="tel:+639177261021" class="text-papaGold font-semibold">+63 917 726 1021</a>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-white/50 mb-1">Telephone</p>
+          <a href="tel:0437848781" class="text-papaGold font-semibold">(043) 784-8781</a>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-white/50 mb-1">Facebook</p>
+          <p class="text-white/85">Papa Es Diner</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

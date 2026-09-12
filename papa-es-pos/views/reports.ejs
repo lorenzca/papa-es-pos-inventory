@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
+  <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
+</head>
+<body class="text-white p-4 md:p-6 bg-slate-900">
+  <%- include('partials/header', { user, pageTitle: 'Reports' }) %>
+
+  <nav class="mb-4 flex flex-wrap gap-2 text-sm">
+    <a href="/dashboard" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Dashboard</a>
+    <a href="/pos" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">POS</a>
+    <a href="/menu" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Menu</a>
+    <a href="/audit" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Audit Trail</a>
+    <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
+  </nav>
+
+  <%# panel picker ------------------------------------------------------------------------------------ %>
+  <section class="card-panel p-4 mb-4">
+    <p class="text-xs uppercase tracking-wide text-white/50 mb-2">Choose a report</p>
+    <div class="flex flex-wrap gap-2">
+      <% panels.forEach((entry) => { %>
+        <a href="/reports?panel=<%= entry.key %>&date=<%= date %>"
+           class="tab-btn <%= panel === entry.key ? 'is-active' : '' %>"><%= entry.label %></a>
+      <% }) %>
+    </div>
+  </section>
+
+  <section class="card-panel p-4">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+      <div>
+        <h2 class="text-xl text-papaGold font-semibold"><%= panelMeta.label %></h2>
+        <p class="text-xs text-white/60"><%= panelMeta.hint %></p>
+      </div>
+
+      <% if (panel === 'receipts') { %>
+        <form method="GET" action="/reports" class="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="panel" value="receipts" />
+          <input type="date" name="date" value="<%= date %>" class="bg-slate-800 border border-slate-700 rounded p-2 text-sm" />
+          <input type="text" name="q" value="<%= query %>" placeholder="OR number or cashier"
+                 class="bg-slate-800 border border-slate-700 rounded p-2 text-sm min-w-[200px]" />
+          <button class="bg-papaGold text-black font-semibold text-sm px-3 py-2 rounded">Search</button>
+        </form>
+      <% } else if (panel !== 'stock') { %>
+        <form method="GET" action="/reports" class="flex items-center gap-2">
+          <input type="hidden" name="panel" value="<%= panel %>" />
+          <input type="date" name="date" value="<%= date %>" class="bg-slate-800 border border-slate-700 rounded p-2 text-sm" />
+          <button class="bg-papaGold text-black font-semibold text-sm px-3 py-2 rounded">Show</button>
+        </form>
+      <% } %>
+    </div>
+
+    <% if (panel === 'sales') { %>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+        <div class="metric-card"><p class="text-xs text-white/60">Sales</p><p class="text-2xl font-bold"><%= salesSummary.count %></p></div>
+        <div class="metric-card"><p class="text-xs text-white/60">Gross</p><p class="text-2xl font-bold">₱<%= salesSummary.gross.toFixed(2) %></p></div>
+        <div class="metric-card"><p class="text-xs text-white/60">Discounts</p><p class="text-2xl font-bold text-papaGold">−₱<%= salesSummary.discounts.toFixed(2) %></p></div>
+        <div class="metric-card"><p class="text-xs text-white/60">Net</p><p class="text-2xl font-bold text-papaGold">₱<%= salesSummary.net.toFixed(2) %></p></div>
+        <div class="metric-card"><p class="text-xs text-white/60">Voided sales</p><p class="text-2xl font-bold text-red-300"><%= salesSummary.voided %></p></div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left">OR No.</th><th class="text-left">Time</th><th class="text-left">Cashier</th>
+              <th class="text-left">Type</th><th class="text-left">Payment</th>
+              <th class="text-right">Gross</th><th class="text-right">Discount</th><th class="text-right">Total</th>
+              <th class="text-left">Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          <% sales.forEach((sale) => { %>
+            <tr class="border-t border-slate-700 <%= (sale.status !== 'COMPLETED' && sale.status !== 'OPEN') ? 'opacity-60' : '' %>">
+              <td><%= sale.or_number %></td>
+              <td><%= (sale.created_at_local || '').slice(11) %></td>
+              <td><%= sale.cashier %></td>
+              <td class="text-xs"><%= sale.order_type %></td>
+              <td class="text-xs"><%= sale.payment_method %></td>
+              <td class="text-right">₱<%= Number(sale.subtotal_amount).toFixed(2) %></td>
+              <td class="text-right">−₱<%= Number(sale.discount_amount).toFixed(2) %></td>
+              <td class="text-right font-semibold">₱<%= Number(sale.total_amount).toFixed(2) %></td>
+              <td class="text-xs <%= sale.status === 'COMPLETED' ? 'text-green-300' : (sale.status === 'OPEN' ? 'text-amber-400 font-medium' : 'text-red-300') %>"><%= sale.status %></td>
+              <td class="text-right"><a href="/receipt/<%= sale.sale_id %>" target="_blank" class="mini-btn">Receipt</a></td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+        <% if (!sales.length) { %>
+          <p class="text-sm text-white/60 py-3">No sales recorded on <%= date %>.</p>
+        <% } %>
+      </div>
+    <% } %>
+
+    <% if (panel === 'voids') { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left">#</th><th class="text-left">Requested</th><th class="text-left">Item</th>
+              <th class="text-right">Qty</th><th class="text-right">Amount</th><th class="text-left">Reason</th>
+              <th class="text-left">Requested by</th><th class="text-left">Authorized by</th>
+              <th class="text-left">Status</th><th class="text-left">OR No.</th>
+            </tr>
+          </thead>
+          <tbody>
+          <% voids.forEach((row) => { %>
+            <tr class="border-t border-slate-700">
+              <td><%= row.id %></td>
+              <td class="text-xs"><%= (row.created_at_local || '').slice(11) %></td>
+              <td><%= row.item_name %><span class="block text-xs text-white/50"><%= row.request_type %></span></td>
+              <td class="text-right"><%= Number(row.void_qty) %></td>
+              <td class="text-right">₱<%= Number(row.line_amount).toFixed(2) %></td>
+              <td class="text-xs max-w-[220px]"><%= row.reason %></td>
+              <td class="text-xs"><%= row.requested_by_name %></td>
+              <td class="text-xs">
+                <% if (row.authorized_by_name) { %>
+                  <%= row.authorized_by_name %><span class="block text-white/50"><%= row.authorized_by_role %> · <%= (row.decided_at_local || '').slice(11) %></span>
+                <% } else { %>
+                  <span class="text-white/40">—</span>
+                <% } %>
+              </td>
+              <td class="text-xs <%= row.status === 'APPROVED' ? 'text-green-300' : row.status === 'REJECTED' ? 'text-red-300' : 'text-papaGold' %>"><%= row.status %></td>
+              <td class="text-xs">
+                <% if (row.or_number) { %>
+                  <a href="/receipt/<%= row.sale_id %>" target="_blank" class="underline"><%= row.or_number %></a>
+                <% } else { %>
+                  <span class="text-white/40">draft order</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+        <% if (!voids.length) { %>
+          <p class="text-sm text-white/60 py-3">No void requests were raised on <%= date %>.</p>
+        <% } %>
+      </div>
+    <% } %>
+
+    <% if (panel === 'receipts') { %>
+      <p class="text-xs text-white/50 mb-2">
+        <% if (query) { %>Searching all dates for "<%= query %>".<% } else { %>Showing <%= date %>. Type an OR number to search every date.<% } %>
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left">OR No.</th><th class="text-left">Date &amp; time</th><th class="text-left">Cashier</th>
+              <th class="text-left">Payment</th><th class="text-right">Discount</th><th class="text-right">Total</th>
+              <th class="text-left">Status</th><th class="text-right">Reprints</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          <% receipts.forEach((row) => { %>
+            <tr class="border-t border-slate-700 <%= (row.status !== 'COMPLETED' && row.status !== 'OPEN') ? 'opacity-60' : '' %>">
+              <td class="font-semibold"><%= row.or_number %></td>
+              <td class="text-xs"><%= row.created_at_local %></td>
+              <td class="text-xs"><%= row.cashier %></td>
+              <td class="text-xs"><%= row.payment_method %></td>
+              <td class="text-right">−₱<%= Number(row.discount_amount).toFixed(2) %></td>
+              <td class="text-right font-semibold">₱<%= Number(row.total_amount).toFixed(2) %></td>
+              <td class="text-xs <%= row.status === 'COMPLETED' ? 'text-green-300' : (row.status === 'OPEN' ? 'text-amber-400 font-medium' : 'text-red-300') %>"><%= row.status %></td>
+              <td class="text-right text-xs"><%= Number(row.reprint_count || 0) %></td>
+              <td class="text-right whitespace-nowrap space-x-1">
+                <a href="/receipt/<%= row.sale_id %>" target="_blank" class="mini-btn">View</a>
+                <a href="/receipt/<%= row.sale_id %>?autoprint=1" target="_blank" class="mini-btn">Reprint</a>
+                <% if (row.status === 'COMPLETED') { %>
+                  <button type="button" class="mini-btn mini-btn-danger" onclick="openSaleVoidModal(<%= row.sale_id %>, '<%= row.or_number %>')">Void</button>
+                <% } else if (row.status === 'OPEN') { %>
+                  <span class="text-xs text-amber-400 font-semibold px-2">Active</span>
+                <% } else { %>
+                  <span class="text-xs text-red-400 font-semibold px-2">Voided</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+        <% if (!receipts.length) { %>
+          <p class="text-sm text-white/60 py-3">No receipts match that search.</p>
+        <% } %>
+      </div>
+    <% } %>
+
+    <% if (panel === 'usage') { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left">Ingredient</th><th class="text-right">Used</th><th>Unit</th>
+              <th class="text-right">Cost of usage</th><th class="text-right">Stock on hand</th>
+            </tr>
+          </thead>
+          <tbody>
+          <% usage.forEach((row) => { %>
+            <tr class="border-t border-slate-700">
+              <td><%= row.ingredient_name %></td>
+              <td class="text-right font-semibold"><%= Number(row.used_qty).toFixed(4) %></td>
+              <td><%= row.unit_measure %></td>
+              <td class="text-right">₱<%= Number(row.used_cost || 0).toFixed(2) %></td>
+              <td class="text-right <%= Number(row.stock_qty) <= 0 ? 'text-red-300' : '' %>"><%= Number(row.stock_qty).toFixed(2) %></td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+        <% if (!usage.length) { %>
+          <p class="text-sm text-white/60 py-3">Nothing was consumed on <%= date %>.</p>
+        <% } %>
+      </div>
+    <% } %>
+
+    <% if (panel === 'stock') { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left">Ingredient</th><th class="text-right">Stock</th><th>Unit</th>
+              <th class="text-right">Reorder level</th><th class="text-right">Short by</th><th class="text-left">Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          <% lowStock.forEach((row) => { %>
+            <tr class="border-t border-slate-700">
+              <td><%= row.ingredient_name %></td>
+              <td class="text-right font-semibold <%= row.status === 'OUT' ? 'text-red-300' : 'text-papaGold' %>"><%= Number(row.stock_qty).toFixed(2) %></td>
+              <td><%= row.unit_measure %></td>
+              <td class="text-right"><%= Number(row.reorder_level).toFixed(2) %></td>
+              <td class="text-right"><%= Math.max(0, Number(row.reorder_level) - Number(row.stock_qty)).toFixed(2) %></td>
+              <td class="text-xs <%= row.status === 'OUT' ? 'text-red-300' : 'text-papaGold' %>"><%= row.status %></td>
+              <td class="text-right"><a href="/inventory" class="mini-btn">Restock</a></td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+        <% if (!lowStock.length) { %>
+          <p class="text-sm text-green-300 py-3">Every ingredient is above its reorder level.</p>
+        <% } %>
+      </div>
+    <% } %>
+  </section>
+
+  <%# post sale void ((whole order or selected dishes)) ----------------------------------------------- %>
+  <div id="postSaleVoidModal" class="modal-backdrop hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div class="card-panel bg-slate-900 border border-slate-700 p-5 rounded-lg w-full max-w-md space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-bold text-papaGold" id="voidModalTitle">Void Receipt</h3>
+        <button type="button" onclick="closeSaleVoidModal()" class="text-white/50 hover:text-white">✕</button>
+      </div>
+
+      <%# entire order vs selected dishes %>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" id="typeEntireBtn" class="seg-btn is-active py-2" onclick="setPostSaleVoidMode('ORDER')">Entire Order</button>
+        <button type="button" id="typeDishBtn" class="seg-btn py-2" onclick="setPostSaleVoidMode('ITEM')">Selected Dishes</button>
+      </div>
+
+      <%# multi checklist container (food) %>
+      <div id="dishSelectionSection" class="hidden space-y-2">
+        <label class="text-xs uppercase tracking-wide text-white/50 block">Select Dishes to Void</label>
+        <div id="voidItemList" class="max-h-48 overflow-y-auto space-y-2 pr-1 border border-slate-700/60 rounded p-2 bg-slate-800/40">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+
+      <%# reason %>
+      <div>
+        <label class="text-xs uppercase tracking-wide text-white/50 block mb-1">Reason</label>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <button type="button" class="mini-btn" onclick="setReasonText('Customer returned dish')">Returned dish</button>
+          <button type="button" class="mini-btn" onclick="setReasonText('Wrong table charged')">Wrong table</button>
+          <button type="button" class="mini-btn" onclick="setReasonText('Kitchen remake/spoilage')">Remake/Spoilage</button>
+          <button type="button" class="mini-btn" onclick="setReasonText('Customer cancelled order')">Cancelled</button>
+        </div>
+        <input type="text" id="postSaleReason" placeholder="Reason (minimum 3 characters)"
+               class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-papaGold focus:outline-none" />
+      </div>
+
+      <%# authorizing manager selection %>
+      <div>
+        <label for="postSaleAuthorizerSelect" class="text-xs uppercase tracking-wide text-white/50 block mb-1">Authorizing Manager</label>
+        <select id="postSaleAuthorizerSelect" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-papaGold focus:outline-none">
+          <option value="">Select Authorizer</option>
+        </select>
+      </div>
+
+      <%# manager PIN pad %>
+      <div>
+        <label class="text-xs uppercase tracking-wide text-white/50 block mb-1">Manager PIN</label>
+        <input type="password" id="postSalePin" maxlength="6" readonly placeholder="••••"
+               class="w-full bg-slate-800 border border-slate-700 rounded p-2.5 text-center text-2xl tracking-[0.4em] mb-2 text-white" />
+        <div class="grid grid-cols-3 gap-1.5">
+          <% ['1','2','3','4','5','6','7','8','9'].forEach(k => { %>
+            <button type="button" class="pad-btn py-2 text-base" onclick="pinAdd('<%= k %>')"><%= k %></button>
+          <% }) %>
+          <button type="button" class="pad-btn py-2 text-sm" onclick="pinReset()">Clr</button>
+          <button type="button" class="pad-btn py-2 text-base" onclick="pinAdd('0')">0</button>
+          <button type="button" class="pad-btn py-2 text-sm" onclick="pinBack()">⌫</button>
+        </div>
+      </div>
+
+      <p id="postSaleVoidError" class="text-sm text-red-300 min-h-[20px]"></p>
+
+      <div class="flex gap-2">
+        <button type="button" onclick="closeSaleVoidModal()" class="flex-1 py-3 rounded bg-white/10 hover:bg-white/20 text-sm">Cancel</button>
+        <button type="button" id="confirmVoidSubmitBtn" onclick="submitPostSaleVoid()" class="flex-1 py-3 rounded bg-papaRed hover:bg-red-800 text-white font-bold text-sm">Confirm Void</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeSaleId = null;
+    let voidMode = 'ORDER'; // order or item
+    let currentSaleItems = [];
+    let cachedAuthorizers = [];
+
+    function setReasonText(text) {
+      document.getElementById('postSaleReason').value = text;
+    }
+
+    function pinAdd(k) {
+      const p = document.getElementById('postSalePin');
+      if (p.value.length < 6) p.value += k;
+    }
+    function pinBack() {
+      const p = document.getElementById('postSalePin');
+      p.value = p.value.slice(0, -1);
+    }
+    function pinReset() {
+      document.getElementById('postSalePin').value = '';
+    }
+
+    function setPostSaleVoidMode(mode) {
+      voidMode = mode;
+      document.getElementById('typeEntireBtn').classList.toggle('is-active', mode === 'ORDER');
+      document.getElementById('typeDishBtn').classList.toggle('is-active', mode === 'ITEM');
+      document.getElementById('dishSelectionSection').classList.toggle('hidden', mode !== 'ITEM');
+    }
+
+    async function populateReportsAuthorizers() {
+      const select = document.getElementById('postSaleAuthorizerSelect');
+      if (!select) return;
+
+      if (!cachedAuthorizers.length) {
+        try {
+          const res = await fetch('/void/pending', { headers: { Accept: 'application/json' } });
+          const data = await res.json();
+          if (Array.isArray(data.authorizers)) {
+            cachedAuthorizers = data.authorizers;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      select.innerHTML = '<option value="">Select Authorizer</option>';
+      cachedAuthorizers.forEach(mgr => {
+        const opt = document.createElement('option');
+        opt.value = mgr.id;
+        opt.textContent = `${mgr.full_name} (${mgr.role})`;
+        select.appendChild(opt);
+      });
+    }
+
+    async function openSaleVoidModal(saleId, orNumber) {
+      activeSaleId = saleId;
+      document.getElementById('voidModalTitle').textContent = `Void ${orNumber}`;
+      document.getElementById('postSaleReason').value = '';
+      document.getElementById('postSalePin').value = '';
+      document.getElementById('postSaleVoidError').textContent = '';
+      setPostSaleVoidMode('ORDER');
+
+      await populateReportsAuthorizers();
+      const select = document.getElementById('postSaleAuthorizerSelect');
+      if (select) select.value = '';
+
+      const listContainer = document.getElementById('voidItemList');
+      listContainer.innerHTML = '<p class="text-xs text-white/50">Loading items…</p>';
+
+      document.getElementById('postSaleVoidModal').classList.remove('hidden');
+
+      try {
+        const res = await fetch(`/sales/${saleId}/items`);
+        const data = await res.json();
+        currentSaleItems = data.items || [];
+
+        listContainer.innerHTML = '';
+        let count = 0;
+
+        currentSaleItems.forEach(item => {
+          const available = item.quantity - item.voided_qty;
+          if (available > 0) {
+            count++;
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between gap-2 p-2 rounded bg-slate-800 border border-slate-700 text-sm';
+            row.innerHTML = `
+              <label class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none" title="${item.item_name}">
+                <input type="checkbox" class="void-dish-check accent-amber-400 w-4 h-4 rounded shrink-0" data-id="${item.id}" />
+                <span class="truncate font-medium">${item.item_name}</span>
+              </label>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="text-xs text-white/50">Qty:</span>
+                <input type="number" class="void-dish-qty w-12 bg-slate-900 border border-slate-600 rounded p-1 text-center text-xs font-bold text-white" 
+                      value="1" min="1" max="${available}" data-id="${item.id}" />
+                <span class="text-xs text-white/40">/${available}</span>
+              </div>
+            `;
+            listContainer.appendChild(row);
+          }
+        });
+
+        if (count === 0) {
+          listContainer.innerHTML = '<p class="text-xs text-white/50">No active items remaining</p>';
+        }
+      } catch (err) {
+        listContainer.innerHTML = '<p class="text-xs text-red-300">Could not load items</p>';
+      }
+    }
+
+    function closeSaleVoidModal() {
+      document.getElementById('postSaleVoidModal').classList.add('hidden');
+      activeSaleId = null;
+    }
+
+    async function submitPostSaleVoid() {
+      const errEl = document.getElementById('postSaleVoidError');
+      errEl.textContent = '';
+      const pin = document.getElementById('postSalePin').value;
+      const reason = document.getElementById('postSaleReason').value.trim();
+      const authorizerId = document.getElementById('postSaleAuthorizerSelect').value;
+
+      if (!authorizerId) {
+        errEl.textContent = 'Please select an authorizing manager.';
+        return;
+      }
+      if (reason.length < 3) {
+        errEl.textContent = 'Please enter a valid reason (min 3 chars).';
+        return;
+      }
+      if (pin.length < 4) {
+        errEl.textContent = 'Enter the manager PIN (min 4 digits).';
+        return;
+      }
+
+      const btn = document.getElementById('confirmVoidSubmitBtn');
+      btn.disabled = true;
+
+      try {
+        let endpoint = `/sales/${activeSaleId}/void-order`;
+        let payload = { pin, reason, authorizerId: Number(authorizerId) };
+
+        if (voidMode === 'ITEM') {
+          const checkedBoxes = document.querySelectorAll('.void-dish-check:checked');
+          if (!checkedBoxes.length) {
+            errEl.textContent = 'Please select at least one dish to void.';
+            btn.disabled = false;
+            return;
+          }
+
+          const itemsToVoid = [];
+          checkedBoxes.forEach(cb => {
+            const id = cb.getAttribute('data-id');
+            const qtyInput = document.querySelector(`.void-dish-qty[data-id="${id}"]`);
+            itemsToVoid.push({
+              saleItemId: id,
+              qty: Number(qtyInput ? qtyInput.value : 1)
+            });
+          });
+
+          endpoint = `/sales/${activeSaleId}/void-item`;
+          payload = { pin, reason, authorizerId: Number(authorizerId), itemsToVoid };
+        }
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          errEl.textContent = data.message || 'Void failed.';
+          btn.disabled = false;
+          return;
+        }
+
+        closeSaleVoidModal();
+        window.location.reload();
+      } catch (err) {
+        errEl.textContent = 'Network error occurred.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

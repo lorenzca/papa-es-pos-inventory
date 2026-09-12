@@ -1,0 +1,23 @@
+{
+  "name": "papa-es-pos",
+  "version": "1.0.0",
+  "description": "Sales and Inventory Management System with Automated Stock Deduction and Staff Monitoring for Papa Es",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/pricing.test.js && node tests/search.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "multer": "^2.0.0",
+    "mysql2": "^3.11.3"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
+  }
+}
