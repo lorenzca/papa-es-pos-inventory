@@ -62,9 +62,16 @@ router.get('/receipt/:id', ensureAuthenticated, ensureRole(POS_ROLES), receiptCo
 router.get('/sales/:saleId/items', ensureAuthenticated, ensureRole(POS_ROLES), async (req, res) => {
   try {
     const [items] = await pool.execute(
-      `SELECT id, menu_item_id, item_name, quantity, voided_qty, unit_price 
-       FROM sale_items 
-       WHERE sale_id = ?`,
+      `SELECT si.id, 
+              si.menu_item_id, 
+              mi.item_name, 
+              si.quantity, 
+              COALESCE(si.voided_qty, 0) AS voided_qty, 
+              si.unit_price 
+       FROM sale_items si
+       JOIN menu_items mi ON mi.id = si.menu_item_id
+       WHERE si.sale_id = ?
+       ORDER BY si.id ASC`,
       [req.params.saleId]
     );
     return res.json({ items });
@@ -82,9 +89,19 @@ router.get('/void/pending', ensureAuthenticated, ensureRole(POS_ROLES), voidCont
 router.post('/void/request', ensureAuthenticated, ensureRole(POS_ROLES), voidController.postRequest);
 router.post('/void/:id/decide', ensureAuthenticated, ensureRole(POS_ROLES), voidController.postDecide);
 
-// inventory tracking anf stock adjustments
+// inventory tracking and stock adjustments
 router.get('/inventory', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getInventory);
 router.post('/inventory/adjust', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postAdjustment);
+
+// order guides & bulk receiving
+router.get('/api/inventory/order-guides', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getOrderGuides);
+router.delete('/api/inventory/order-guides/:id', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.deleteOrderGuide);
+router.get('/api/inventory/order-guides/:id/items', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getOrderGuideItems);
+router.get('/api/inventory/orders/pending', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getPendingOrders);
+router.get('/api/inventory/orders/:id', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getOrderDetails);
+router.post('/api/inventory/orders/create', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postCreateOrder);
+router.post('/api/inventory/orders/:id/receive', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postReceiveExistingOrder);
+router.post('/api/inventory/receive', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postReceiveDelivery);
 
 // menu item management and ingredient recipes
 router.get('/menu', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), menuController.getMenu);

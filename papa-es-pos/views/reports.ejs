@@ -229,7 +229,7 @@
               <td class="text-right font-semibold <%= row.status === 'OUT' ? 'text-red-300' : 'text-papaGold' %>"><%= Number(row.stock_qty).toFixed(2) %></td>
               <td><%= row.unit_measure %></td>
               <td class="text-right"><%= Number(row.reorder_level).toFixed(2) %></td>
-              <td class="text-right"><%= Math.max(0, Number(row.reorder_level) - Number(row.stock_qty)).toFixed(2) %></td>
+              <td class="text-right"><Math class="max" data-val="0"></Math>Math.max(0, Number(row.reorder_level) - Number(row.stock_qty)).toFixed(2) %></td>
               <td class="text-xs <%= row.status === 'OUT' ? 'text-red-300' : 'text-papaGold' %>"><%= row.status %></td>
               <td class="text-right"><a href="/inventory" class="mini-btn">Restock</a></td>
             </tr>
@@ -388,15 +388,18 @@
         let count = 0;
 
         currentSaleItems.forEach(item => {
-          const available = item.quantity - item.voided_qty;
+          const available = item.quantity - (item.voided_qty || 0);
           if (available > 0) {
             count++;
+            // Fallback resolution prevents rendering "null" if column names vary
+            const displayName = item.item_name || item.name || item.dish_name || ('Dish #' + (item.menu_item_id || item.id));
+
             const row = document.createElement('div');
             row.className = 'flex items-center justify-between gap-2 p-2 rounded bg-slate-800 border border-slate-700 text-sm';
             row.innerHTML = `
-              <label class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none" title="${item.item_name}">
+              <label class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none" title="${displayName}">
                 <input type="checkbox" class="void-dish-check accent-amber-400 w-4 h-4 rounded shrink-0" data-id="${item.id}" />
-                <span class="truncate font-medium">${item.item_name}</span>
+                <span class="truncate font-medium">${displayName}</span>
               </label>
               <div class="flex items-center gap-1.5 shrink-0">
                 <span class="text-xs text-white/50">Qty:</span>

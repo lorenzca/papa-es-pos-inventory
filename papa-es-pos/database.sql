@@ -127,6 +127,54 @@ CREATE TABLE void_events (
   CONSTRAINT fk_void_cashier FOREIGN KEY (cashier_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
+CREATE TABLE storage_areas (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE order_guides (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  guide_name VARCHAR(120) NOT NULL,
+  supplier_name VARCHAR(120) DEFAULT NULL,
+  storage_area_id INT DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_guide_area FOREIGN KEY (storage_area_id) REFERENCES storage_areas(id) ON DELETE SET NULL
+);
+
+CREATE TABLE order_guide_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_guide_id INT NOT NULL,
+  ingredient_id INT NOT NULL,
+  default_qty DECIMAL(12,2) NOT NULL DEFAULT 1.00,
+  unit VARCHAR(20) NOT NULL DEFAULT 'g',
+  default_unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_guide_item_guide FOREIGN KEY (order_guide_id) REFERENCES order_guides(id) ON DELETE CASCADE,
+  CONSTRAINT fk_guide_item_ing FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
+);
+
+CREATE TABLE delivery_intakes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_guide_id INT DEFAULT NULL,
+  supplier_name VARCHAR(120) NOT NULL,
+  received_by VARCHAR(100) NOT NULL,
+  total_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  status ENUM('PENDING', 'RECEIVED') NOT NULL DEFAULT 'RECEIVED',
+  expected_date DATE NULL,
+  received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_delivery_guide FOREIGN KEY (order_guide_id) REFERENCES order_guides(id) ON DELETE SET NULL
+);
+
+CREATE TABLE delivery_intake_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  delivery_id INT NOT NULL,
+  ingredient_id INT NOT NULL,
+  received_qty DECIMAL(12,2) NOT NULL,
+  unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  CONSTRAINT fk_delivery_item_del FOREIGN KEY (delivery_id) REFERENCES delivery_intakes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_delivery_item_ing FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE RESTRICT
+);
 -- ===========================================================================
 -- INITIAL SEED DATA
 -- ===========================================================================
@@ -1711,3 +1759,38 @@ FROM (
 JOIN menu_items m ON m.item_name = r.item
 JOIN ingredients i ON i.ingredient_name = r.ing
 GROUP BY m.id, i.id;
+
+-- 11. STORAGE AREAS & VENDOR ORDER GUIDES SEED
+
+INSERT INTO storage_areas (name) VALUES
+('Walk-in Cooler / Chiller'),
+('Dry Storage Pantry'),
+('Prep & Sizzling Station');
+
+-- Preset 1: Wet Market 1 (Produce)
+INSERT INTO order_guides (guide_name, supplier_name, storage_area_id) VALUES
+('Wet Market 1', 'Wet Market 1', 1);
+
+SET @guide_veg = LAST_INSERT_ID();
+
+INSERT INTO order_guide_items (order_guide_id, ingredient_id, default_qty, unit, default_unit_cost)
+SELECT @guide_veg, id, 5000.00, unit_measure, unit_cost FROM ingredients WHERE ingredient_name = 'Red Onion'
+UNION ALL
+SELECT @guide_veg, id, 3000.00, unit_measure, unit_cost FROM ingredients WHERE ingredient_name = 'Garlic'
+UNION ALL
+SELECT @guide_veg, id, 4000.00, unit_measure, unit_cost FROM ingredients WHERE ingredient_name = 'Tomato'
+UNION ALL
+SELECT @guide_veg, id, 2000.00, unit_measure, unit_cost FROM ingredients WHERE ingredient_name = 'Ginger';
+
+-- Preset 2: Meat Shop 1 (Pork & Beef)
+INSERT INTO order_guides (guide_name, supplier_name, storage_area_id) VALUES
+('Meat Shop 1', 'Meat Shop 1', 1);
+
+SET @guide_meat = LAST_INSERT_ID();
+
+INSERT INTO order_guide_items (order_guide_id, ingredient_id, default_qty, unit, default_unit_cost)
+SELECT @guide_meat, id, 15000.00, unit_measure, unit_cost FROM ingredients WHERE ingredient_name = 'Raw Pork Belly'
+UNION ALL
+SELECT @guide_meat, id, 10000.00, unit_measure, unit_cost FROM ingredients WHERE ingredient_name = 'Raw Pork Shoulder'
+UNION ALL
+SELECT @guide_meat, id, 10000.00, unit_measure, unit_cost FROM ingredients WHERE ingredient_name = 'Raw Beef';

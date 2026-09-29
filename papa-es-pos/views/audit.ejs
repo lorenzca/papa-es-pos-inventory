@@ -30,9 +30,12 @@
   </section>
 
   <section class="card-panel bg-slate-900 border border-slate-700 p-4 rounded-lg overflow-x-auto">
-    <div class="mb-3 flex items-center justify-between gap-2">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-lg font-semibold text-papaGold">Activity Feed</h2>
-      <input id="auditSearch" placeholder="Filter by user, action, entity..." class="bg-slate-800 border border-slate-700 p-2 rounded text-sm w-full max-w-sm text-white focus:outline-none focus:border-papaGold" />
+      <div class="flex items-center gap-2">
+        <input type="date" id="auditDate" onchange="filterAudit()" class="bg-slate-800 border border-slate-700 p-2 rounded text-sm text-white focus:outline-none focus:border-papaGold" />
+        <input id="auditSearch" oninput="filterAudit()" placeholder="Filter by user, action, entity..." class="bg-slate-800 border border-slate-700 p-2 rounded text-sm w-full max-w-sm text-white focus:outline-none focus:border-papaGold" />
+      </div>
     </div>
 
     <table class="w-full text-sm" id="auditTable">
@@ -65,16 +68,23 @@
           <td>
             <% 
               let badgeColor = 'bg-slate-700 text-white';
-              if (log.action.includes('APPROVED') || log.action.includes('COMPLETED')) badgeColor = 'bg-emerald-950 border border-emerald-500/40 text-emerald-300';
+              if (log.action.includes('APPROVED') || log.action.includes('COMPLETED') || log.action === 'DELIVERY_RECEIVED') badgeColor = 'bg-emerald-950 border border-emerald-500/40 text-emerald-300';
               if (log.action.includes('REJECTED') || log.action.includes('VOID')) badgeColor = 'bg-red-950 border border-red-500/40 text-red-300';
-              if (log.action.includes('OPENED') || log.action.includes('UPDATED')) badgeColor = 'bg-amber-950 border border-amber-500/40 text-amber-300';
+              if (log.action.includes('OPENED') || log.action.includes('UPDATED') || log.action.includes('ORDER')) badgeColor = 'bg-amber-950 border border-amber-500/40 text-amber-300';
             %>
             <span class="px-2 py-0.5 text-xs font-semibold rounded <%= badgeColor %>"><%= log.action %></span>
           </td>
           <td class="text-xs text-white/60"><%= log.entity_type %><%= log.entity_id ? (' #' + log.entity_id) : '' %></td>
           <td class="text-xs text-white/80 max-w-md">
-            <% if (log.action === 'SALE_COMPLETED') { %>
+           <% if (log.action === 'DELIVERY_RECEIVED') { %>
+              <span>Received <%= d.item_count || 0 %> item(s) from <strong class="text-white"><%= d.supplier_name || 'Vendor' %></strong> · ₱<%= Number(d.total_cost || 0).toFixed(2) %></span>
+
+            <% } else if (log.action === 'PURCHASE_ORDER_CREATED') { %>
+              <span>Ordered <%= d.item_count || 0 %> item(s) for <strong class="text-white"><%= d.supplier_name || 'Vendor' %></strong> · Est. Total: ₱<%= Number(d.total_cost || 0).toFixed(2) %></span>
+            <% } else if (log.action === 'SALE_COMPLETED') { %>
               <span class="font-semibold text-white"><%= d.or_number || 'Sale' %></span> · Total: ₱<%= Number(d.total || 0).toFixed(2) %> (<%= d.payment_method %>)<% if (d.table_number) { %> <span class="text-white/50">· <%= d.table_number %></span><% } %>
+            <% } else if (log.action === 'RECEIPT_REPRINTED') { %>
+              <span>Reprinted receipt <strong class="text-white">(<%= d.or_number || 'OR' %>)</strong></span>
 
             <% } else if (log.action === 'USER_LOGIN' || log.action === 'USER_LOGOUT') { %>
               <span>Logged in as <strong class="text-papaGold"><%= d.username %></strong> (<%= d.role %>)</span>
@@ -120,15 +130,12 @@
       return acc;
     }, {});
 
-    const chartLabels = Object.keys(grouped).slice(0, 10);
-    const chartData = Object.values(grouped).slice(0, 10);
-
     new Chart(document.getElementById('auditChart'), {
       type: 'bar',
       data: {
-        labels: chartLabels.length ? chartLabels : ['No Activity'],
+        labels: Object.keys(grouped).slice(0, 10),
         datasets: [{
-          data: chartData.length ? chartData : [0],
+          data: Object.values(grouped).slice(0, 10),
           backgroundColor: 'rgba(212, 175, 55, 0.75)',
           borderRadius: 6
         }]
@@ -143,12 +150,17 @@
       }
     });
 
-    document.getElementById('auditSearch').addEventListener('input', (event) => {
-      const q = event.target.value.toLowerCase();
-      document.querySelectorAll('#auditTable tbody tr').forEach((row) => {
-        row.style.display = row.innerText.toLowerCase().includes(q) ? '' : 'none';
+    function filterAudit() {
+      const q = document.getElementById('auditSearch').value.toLowerCase();
+      const d = document.getElementById('auditDate').value;
+      document.querySelectorAll('#auditTable tbody tr').forEach(row => {
+        const text = row.innerText.toLowerCase();
+        const timeCell = row.cells[0]?.innerText || '';
+        const matchesQuery = !q || text.includes(q);
+        const matchesDate = !d || timeCell.startsWith(d);
+        row.style.display = (matchesQuery && matchesDate) ? '' : 'none';
       });
-    });
+    }
   </script>
 </body>
 </html>

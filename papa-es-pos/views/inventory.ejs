@@ -8,108 +8,510 @@
   <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
 </head>
 <body class="text-white p-4 md:p-6">
-  <%- include('partials/header', { user, pageTitle: 'Inventory Management' }) %>
+  <%- include('partials/header', { user, pageTitle: 'Inventory & Stock Control' }) %>
 
   <nav class="mb-4 flex flex-wrap gap-2 text-sm">
-    <% if (user && ['OWNER','MANAGER'].includes(user.role)) { %><a href="/dashboard" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Dashboard</a><a href="/menu" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Menu</a><% } %>
+    <% if (user && ['OWNER','MANAGER'].includes(user.role)) { %>
+      <a href="/dashboard" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Dashboard</a>
+      <a href="/menu" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Menu</a>
+      <a href="/reports" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Reports</a>
+    <% } %>
     <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
   </nav>
 
-  <section class="card-panel p-4 overflow-x-auto">
-    <!-- Search Bar & Helper Text Container -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-      <p class="text-sm text-white/70">Click any row to restock or adjust stock.</p>
-      
-      <div class="flex items-center gap-2">
-        <input 
-          type="text" 
-          id="inventorySearch" 
-          oninput="filterInventory()" 
-          placeholder="Search ingredients"
-          class="bg-slate-800 text-sm text-white border border-slate-700 focus:border-papaGold focus:outline-none p-2 rounded min-w-[200px]"
-        />
-        <button 
-          type="button" 
-          onclick="filterInventory()" 
-          class="bg-papaGold text-black font-semibold text-sm px-3 py-2 rounded hover:bg-yellow-500 transition"
-        >
-          Search
-        </button>
-      </div>
+  <!-- PANEL PICKER (MATCHES MENU.EJS EXACTLY) -->
+  <section class="card-panel p-4 mb-4">
+    <p class="text-xs uppercase tracking-wide text-white/50 mb-2">Choose what to do</p>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" onclick="switchInvTab('stock')" id="tab-stock" class="tab-btn is-active">Current Stock</button>
+      <button type="button" onclick="openNewIntake()" id="tab-intake" class="tab-btn">Receive Delivery</button>
+      <button type="button" onclick="switchInvTab('history')" id="tab-history" class="tab-btn">Delivery History</button>
     </div>
-
-    <table class="w-full text-sm" id="inventoryTable">
-      <thead><tr><th class="text-left">Ingredient</th><th class="text-right">Stock</th><th>Unit</th><th class="text-right">Reorder</th><th class="text-right">Cost</th></tr></thead>
-      <tbody>
-      <% ingredients.forEach(i=>{ %>
-        <tr class="border-t border-slate-700 cursor-pointer hover:bg-white/5"
-            data-search="<%= i.ingredient_name %> <%= i.unit_measure %>"
-            onclick="openRestockModal(<%= i.id %>, '<%= i.ingredient_name %>')">
-          <td><%= i.ingredient_name %></td>
-          <td class="text-right"><%= Number(i.stock_qty).toFixed(2) %></td>
-          <td><%= i.unit_measure %></td>
-          <td class="text-right"><%= i.reorder_level %></td>
-          <td class="text-right">₱<%= Number(i.unit_cost).toFixed(2) %></td>
-        </tr>
-      <% }) %>
-      </tbody>
-    </table>
-    <p id="inventoryEmpty" class="hidden text-sm text-white/60 py-3">No ingredient matches that search.</p>
   </section>
 
-  <div id="restockModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4">
-    <div class="card-panel p-4 w-full max-w-md">
-      <h3 class="text-xl text-papaGold font-semibold mb-2">Restock Ingredient</h3>
-      <form method="POST" action="/inventory/adjust" class="space-y-2">
+  <!-- TAB 1: CURRENT STOCK (MATCHES MENU.EJS LIST PANEL) -->
+  <div id="view-stock" class="inv-view block space-y-4">
+    <section class="card-panel p-4">
+      <div class="mb-3">
+        <h2 class="text-xl text-papaGold font-semibold">Stock Inventory</h2>
+        <p class="text-xs text-white/60">Every ingredient, on-hand count, and reorder par level.</p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <p class="text-xs text-white/50"><%= ingredients.length %> item(s) on file.</p>
+        <div class="flex items-center gap-2">
+          <input type="text" id="inventorySearch" oninput="filterInventory()" autocomplete="off"
+                 placeholder="Search ingredients"
+                 class="bg-slate-800 text-sm text-white border border-slate-700 focus:border-papaGold focus:outline-none p-2 rounded min-w-[220px]" />
+          <button type="button" onclick="filterInventory()" class="mini-btn">Search</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" id="inventoryTable">
+          <thead>
+            <tr>
+              <th class="text-left">Name</th>
+              <th class="text-right">Current Stock</th>
+              <th class="text-center">Unit</th>
+              <th class="text-right">Reorder Par</th>
+              <th class="text-right">Unit Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+          <% ingredients.forEach(i => { %>
+            <tr class="border-t border-slate-700 hover:bg-white/5 transition cursor-pointer"
+                data-search="<%= i.ingredient_name %> <%= i.unit_measure %>"
+                data-id="<%= i.id %>"
+                data-name="<%= i.ingredient_name %>"
+                data-unit="<%= i.unit_measure %>"
+                data-stock="<%= Number(i.stock_qty).toFixed(2) %>"
+                data-cost="<%= Number(i.unit_cost || 0).toFixed(2) %>"
+                onclick="openRestockModal(this.dataset.id, this.dataset.name, this.dataset.unit, this.dataset.stock, this.dataset.cost)">
+              <td class="py-2.5">
+                <span class="flex items-center gap-2">
+                  <span><%= i.ingredient_name %></span>
+                  <% if (Number(i.stock_qty) <= Number(i.reorder_level)) { %>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">Low</span>
+                  <% } %>
+                </span>
+              </td>
+              <td class="text-right <%= Number(i.stock_qty) <= Number(i.reorder_level) ? 'text-amber-400 font-semibold' : '' %>">
+                <%= Number(i.stock_qty).toFixed(2) %>
+              </td>
+              <td class="text-center text-white/60"><%= i.unit_measure %></td>
+              <td class="text-right text-white/60"><%= i.reorder_level %></td>
+              <td class="text-right">₱<%= Number(i.unit_cost || 0).toFixed(2) %></td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+        <p id="inventoryEmpty" class="hidden text-sm text-white/60 py-3">No ingredient matches that search.</p>
+        <% if (!ingredients.length) { %>
+          <p class="text-sm text-white/60 py-3">No ingredients on file.</p>
+        <% } %>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB 2: RECEIVE DELIVERY -->
+  <div id="view-intake" class="inv-view hidden space-y-4">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      
+      <!-- Left Column: Receive Delivery / PO Form -->
+      <div class="lg:col-span-7 xl:col-span-8 card-panel p-4 flex flex-col min-h-[75vh]">
+        <div class="flex justify-between items-center border-b border-slate-700/60 pb-3 mb-4 shrink-0">
+          <div>
+            <h3 id="intakeTitleText" class="text-base text-papaGold font-semibold">Receive Delivery</h3>
+            <p class="text-xs text-white/60">Enter quantities in kg or g. Recipe units convert automatically.</p>
+          </div>
+          <button type="button" onclick="autoFillSuggestedOrders()" class="mini-btn">
+            Suggest Restock
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 shrink-0">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs text-white/60 block">Order Guide</label>
+              <button type="button" id="deleteGuideBtn" onclick="deleteCurrentGuide()" 
+                      class="hidden text-[10px] text-red-400 hover:text-red-300 font-semibold transition">
+                Delete Preset
+              </button>
+            </div>
+            <select id="guideSelect" onchange="loadGuideItems()" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white focus:border-papaGold focus:outline-none">
+              <option value="">Select a Preset Guide</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-white/60 block mb-1">Supplier / Vendor</label>
+            <input type="text" id="supplierNameInput" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white focus:border-papaGold focus:outline-none" placeholder="e.g. Wet Market 1" />
+          </div>
+          <div id="expectedDateContainer">
+            <label class="text-xs text-white/60 block mb-1">Expected Arrival</label>
+            <input type="date" id="expectedDateInput" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white focus:border-papaGold focus:outline-none" />
+          </div>
+        </div>
+
+        <!-- Search Bar with Search Button -->
+        <div class="relative shrink-0 mb-3">
+          <div class="flex items-center gap-2">
+            <input type="text" id="ingredientSearchInput" autocomplete="off" onfocus="showIngredientDropdown()" oninput="filterIngredientDropdown()" 
+                   placeholder="Search and add ingredient..." class="flex-1 bg-slate-800 border border-slate-700 focus:border-papaGold focus:outline-none p-2 rounded text-xs text-white placeholder-white/40" />
+            <button type="button" onclick="showIngredientDropdown(); filterIngredientDropdown();" class="mini-btn">
+              Search
+            </button>
+          </div>
+          <div id="ingredientResults" class="hidden absolute left-0 right-0 top-full mt-1 z-50 max-h-44 overflow-y-auto bg-slate-800 border border-slate-700 rounded shadow-lg divide-y divide-slate-700/50">
+            <% ingredients.forEach(i => { %>
+              <button type="button" class="ingredient-result-item w-full text-left p-2 text-xs hover:bg-papaGold hover:text-black flex items-center justify-between transition"
+                      data-id="<%= i.id %>" data-name="<%= i.ingredient_name %>" data-unit="<%= i.unit_measure %>" data-cost="<%= i.unit_cost %>"
+                      data-stock="<%= i.stock_qty %>" data-reorder="<%= i.reorder_level %>" data-hist="<%= i.historical_avg || i.unit_cost %>"
+                      data-search="<%= i.ingredient_name %> <%= i.unit_measure %>" onclick="selectIngredientItem(this)">
+                <span><%= i.ingredient_name %></span>
+                <span class="text-[11px] opacity-70">Par: <%= i.reorder_level %> <%= i.unit_measure %></span>
+              </button>
+            <% }) %>
+            <div id="ingredientNoResults" class="hidden p-3 text-center text-xs text-white/40">No ingredient matching that search.</div>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto border border-slate-700/60 rounded bg-black/20">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-800/90 text-white sticky top-0 border-b border-slate-700">
+              <tr>
+                <th class="p-2.5">Name</th>
+                <th class="p-2.5 text-center w-20">Unit</th>
+                <th class="p-2.5 text-right w-24">Qty</th>
+                <th class="p-2.5 text-right w-32">Cost / Unit</th>
+                <th class="p-2.5 text-right w-28">Subtotal</th>
+                <th class="p-2.5 text-center w-8"></th>
+              </tr>
+            </thead>
+            <tbody id="receivingTableBody" class="divide-y divide-slate-800/60">
+              <tr><td colspan="6" class="p-6 text-center text-white/40">Select an order guide or search an ingredient above.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pt-3 border-t border-slate-700/60 shrink-0 space-y-2.5 mt-3">
+          <div id="saveGuideDrawer" class="hidden bg-slate-800/95 border border-slate-700 p-2.5 rounded transition-all">
+            <div id="guideNameInputRow" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="flex-1 flex items-center gap-2">
+                <span class="text-xs text-white/70 shrink-0">Preset Name:</span>
+                <input type="text" id="inlineGuideNameInput" placeholder="e.g. Meat Shop 2 or Morning Veggies" class="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white focus:border-papaGold focus:outline-none" />
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="cancelSaveGuide()" class="mini-btn">Cancel</button>
+                <button type="button" onclick="confirmSaveGuide()" class="bg-papaGold text-black font-semibold text-xs px-3 py-1 rounded">Apply Name</button>
+              </div>
+            </div>
+            <div id="guideOverwriteConfirmRow" class="hidden flex items-center justify-between gap-3 text-xs">
+              <span class="text-amber-400">A preset with this name already exists. Overwrite its saved items?</span>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="cancelOverwrite()" class="mini-btn">Cancel</button>
+                <button type="button" onclick="applyOverwrite()" class="bg-amber-500 text-black font-semibold text-xs px-3 py-1 rounded">Yes, Overwrite</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-3 w-full">
+            <div class="flex flex-col shrink-0">
+              <span class="text-[10px] uppercase tracking-wide text-white/40 mb-1">Total Amount</span>
+              <strong id="intakeTotal" class="text-xl font-bold text-papaGold leading-none">₱0.00</strong>
+            </div>
+            <div class="flex flex-wrap justify-end items-center gap-2 shrink-0">
+              <button type="button" id="saveGuideBtn" onclick="toggleSaveGuideDrawer()" class="mini-btn">Save Preset</button>
+              <button type="button" id="savePendingOrderBtn" onclick="submitPendingOrder()" class="mini-btn">Place Order (Pending)</button>
+              <button type="button" id="submitDeliveryBtn" onclick="submitFinalDelivery()" class="bg-papaGold text-black px-4 py-2 rounded font-bold text-xs">Confirm & Post Stock</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Queue & Recent Intakes -->
+      <div class="lg:col-span-5 xl:col-span-4 space-y-4">
+        
+        <div class="card-panel p-4">
+          <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-700/60">
+            <h3 class="text-xs font-semibold text-papaGold uppercase tracking-wide">Pending Orders</h3>
+            <span class="text-[11px] text-white/50"><%= (locals.pendingOrders || []).length %> open</span>
+          </div>
+
+          <% if (locals.pendingOrders && pendingOrders.length > 0) { %>
+            <div class="max-h-64 overflow-y-auto space-y-2 pr-1">
+              <% pendingOrders.forEach(po => { %>
+                <div class="p-2.5 rounded bg-black/20 border border-slate-700/50 flex items-center justify-between gap-2 text-xs">
+                  <div>
+                    <span class="text-white block font-medium"><%= po.supplier_name || 'Vendor' %></span>
+                    <span class="text-[10px] text-white/40 block">Due: <%= po.expected_date ? new Date(po.expected_date).toLocaleDateString() : '—' %></span>
+                    <span class="text-white/80">₱<%= Number(po.total_cost).toFixed(2) %></span>
+                  </div>
+                  <button type="button" data-po-id="<%= po.id %>" onclick="openReceiveIntake(this.dataset.poId)" class="mini-btn">
+                    Receive
+                  </button>
+                </div>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <p class="text-xs text-white/40 py-4 text-center">No pending orders in the queue.</p>
+          <% } %>
+        </div>
+
+        <div class="card-panel p-4">
+          <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-700/60">
+            <h3 class="text-xs font-semibold text-white">Recent Intakes</h3>
+            <button type="button" onclick="switchInvTab('history')" class="text-[11px] text-papaGold hover:underline">
+              View All History →
+            </button>
+          </div>
+
+          <% if (locals.intakeHistory && intakeHistory.length > 0) { %>
+            <div class="max-h-56 overflow-y-auto space-y-2 pr-1">
+              <% intakeHistory.slice(0, 5).forEach(dh => { %>
+                <div class="p-2 rounded bg-black/20 border border-slate-700/40 text-xs flex justify-between items-center">
+                  <div class="truncate mr-2">
+                    <span class="text-white/90 block truncate"><%= dh.supplier_name || 'Vendor' %></span>
+                    <span class="text-[10px] text-white/40"><%= dh.received_at ? new Date(dh.received_at).toLocaleDateString() : '—' %></span>
+                  </div>
+                  <span class="text-white/80 shrink-0">₱<%= Number(dh.total_cost || 0).toFixed(2) %></span>
+                </div>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <p class="text-xs text-white/40 py-4 text-center">No recent deliveries recorded.</p>
+          <% } %>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB 3: DELIVERY HISTORY -->
+  <div id="view-history" class="inv-view hidden space-y-4">
+    <section class="card-panel p-4">
+      <div class="mb-3">
+        <h2 class="text-xl text-papaGold font-semibold">Delivery Intake History</h2>
+        <p class="text-xs text-white/60">Archived log of confirmed ingredient deliveries.</p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <p class="text-xs text-white/50"><%= (locals.intakeHistory || []).length %> recorded receipt(s).</p>
+        <div class="flex items-center gap-2">
+          <input type="text" id="historySearch" oninput="filterHistory()" autocomplete="off"
+                 placeholder="Search supplier or items"
+                 class="bg-slate-800 text-sm text-white border border-slate-700 focus:border-papaGold focus:outline-none p-2 rounded min-w-[220px]" />
+          <button type="button" onclick="filterHistory()" class="mini-btn">Search</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" id="historyTable">
+          <thead>
+            <tr>
+              <th class="text-left">Received Date</th>
+              <th class="text-left">Supplier / Vendor</th>
+              <th class="text-left">Items Summary</th>
+              <th class="text-center">Received By</th>
+              <th class="text-right">Total Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% (locals.intakeHistory || []).forEach(dh => { %>
+              <tr class="border-t border-slate-700 hover:bg-white/5 transition" data-search="<%= dh.supplier_name || '' %> <%= dh.item_summary || '' %> <%= dh.received_by || '' %>">
+                <td class="py-2.5 text-white/70 whitespace-nowrap">
+                  <%= dh.received_at ? new Date(dh.received_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—' %>
+                </td>
+                <td class="py-2.5 whitespace-nowrap"><%= dh.supplier_name || 'Vendor' %></td>
+                <td class="py-2.5 text-white/70 max-w-md truncate" title="<%= dh.item_summary || '' %>">
+                  <%= dh.item_summary || `${dh.item_count || 0} line item(s)` %>
+                </td>
+                <td class="py-2.5 text-center text-white/60 whitespace-nowrap"><%= dh.received_by || 'Staff' %></td>
+                <td class="py-2.5 text-right whitespace-nowrap">₱<%= Number(dh.total_cost || 0).toFixed(2) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <p id="historyEmpty" class="hidden text-sm text-white/60 py-3">No delivery logs match that search.</p>
+    </section>
+  </div>
+
+  <!-- ALL-IN-ONE ROW CLICK MODAL -->
+  <div id="restockModal" class="fixed inset-0 bg-black/75 hidden items-center justify-center p-4 z-50">
+    <div class="card-panel p-5 w-full max-w-lg space-y-4 shadow-2xl">
+      
+      <div class="flex justify-between items-center border-b border-slate-700/60 pb-2.5">
+        <div>
+          <h3 id="modalIngredientName" class="text-base font-semibold text-papaGold">Ingredient Action</h3>
+          <p id="modalIngredientStock" class="text-xs text-white/50 mt-0.5"></p>
+        </div>
+        <button type="button" onclick="closeRestockModal()" class="text-white/60 hover:text-white text-lg">✕</button>
+      </div>
+
+      <form method="POST" action="/inventory/adjust" class="space-y-4">
         <input type="hidden" name="ingredient_id" id="modalIngredientId" />
-        <p id="modalIngredientLabel" class="text-sm text-white/80"></p>
-        <select name="movement_type" class="w-full bg-slate-800 p-2 rounded">
-          <option value="RESTOCK">RESTOCK</option>
-          <option value="ADJUSTMENT">ADJUSTMENT</option>
-        </select>
-        <input name="qty" type="number" step="0.01" required placeholder="Quantity (+/-)" class="w-full bg-slate-800 p-2 rounded"/>
-        <textarea name="reason" required placeholder="Notes" class="w-full bg-slate-800 p-2 rounded"></textarea>
-        <div class="flex justify-end gap-2">
-          <button type="button" onclick="closeRestockModal()" class="px-3 py-2 rounded bg-white/10">Cancel</button>
-          <button class="bg-papaGold text-black px-4 py-2 rounded font-bold">Save</button>
+
+        <!-- 5 Action Pills -->
+        <div>
+          <label class="text-xs text-white/60 block mb-1.5">Action / Category</label>
+          <div class="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            <label class="cursor-pointer">
+              <input type="radio" name="loss_category" value="RESTOCK" checked onchange="handleModalCategoryChange()" class="peer sr-only">
+              <div class="p-2 text-center rounded border border-slate-700 bg-slate-800/80 peer-checked:border-papaGold peer-checked:bg-papaGold/20 peer-checked:text-papaGold transition hover:bg-slate-800">
+                <div class="text-xs">Restock</div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer">
+              <input type="radio" name="loss_category" value="SPOILAGE" onchange="handleModalCategoryChange()" class="peer sr-only">
+              <div class="p-2 text-center rounded border border-slate-700 bg-slate-800/80 peer-checked:border-red-500/80 peer-checked:bg-red-500/10 peer-checked:text-red-300 transition hover:bg-slate-800">
+                <div class="text-xs">Expired</div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer">
+              <input type="radio" name="loss_category" value="WASTE" onchange="handleModalCategoryChange()" class="peer sr-only">
+              <div class="p-2 text-center rounded border border-slate-700 bg-slate-800/80 peer-checked:border-amber-500/80 peer-checked:bg-amber-500/10 peer-checked:text-amber-300 transition hover:bg-slate-800">
+                <div class="text-xs">Burnt</div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer">
+              <input type="radio" name="loss_category" value="PREP_LOSS" onchange="handleModalCategoryChange()" class="peer sr-only">
+              <div class="p-2 text-center rounded border border-slate-700 bg-slate-800/80 peer-checked:border-slate-500 peer-checked:bg-white/10 peer-checked:text-white transition hover:bg-slate-800">
+                <div class="text-xs">Prep Loss</div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer">
+              <input type="radio" name="loss_category" value="VARIANCE" onchange="handleModalCategoryChange()" class="peer sr-only">
+              <div class="p-2 text-center rounded border border-slate-700 bg-slate-800/80 peer-checked:border-slate-500 peer-checked:bg-white/10 peer-checked:text-white transition hover:bg-slate-800">
+                <div class="text-xs">Variance</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Quantity & Impact -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+          <div>
+            <label class="text-xs text-white/60 block mb-1">
+              Quantity (<span id="modalUnitLabel">units</span>)
+            </label>
+            <input name="input_qty" id="modalInputQty" type="number" step="any" min="0.01" required 
+                   oninput="updateModalCostPreview()" placeholder="e.g. 500" 
+                   class="w-full bg-slate-800 border border-slate-700 text-white text-sm p-2 rounded focus:border-papaGold focus:outline-none"/>
+          </div>
+
+          <div class="bg-black/20 border border-slate-700/60 px-3 py-2 rounded flex flex-col justify-center h-[38px]">
+            <span class="text-[10px] uppercase tracking-wide text-white/40 leading-none">Est. Value Impact</span>
+            <strong id="modalCostPreview" class="text-xs font-normal text-white/80 mt-1 leading-none">₱0.00</strong>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs text-white/60 block mb-1">Reason / Audit Note</label>
+          <input type="text" name="reason" required placeholder="e.g. Weekly physical inventory recount" 
+                 class="w-full bg-slate-800 border border-slate-700 text-white text-xs p-2 rounded focus:border-papaGold focus:outline-none"/>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-700/60">
+          <button type="button" onclick="closeRestockModal()" class="mini-btn">Cancel</button>
+          <button type="submit" id="modalSubmitBtn" class="bg-papaGold hover:bg-yellow-500 text-black px-4 py-2 rounded font-semibold text-xs shadow transition">
+            Save Restock
+          </button>
         </div>
       </form>
     </div>
   </div>
 
+  <div id="invToast" class="fixed top-5 right-5 z-50 transform translate-y-[-20px] opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="card-panel px-4 py-3 rounded shadow-2xl flex items-center gap-2">
+      <span id="invToastMsg" class="text-xs font-semibold"></span>
+    </div>
+  </div>
+
   <script src="/js/smart-search.js?v=<%= locals.assetVersion || 0 %>"></script>
+  <script src="/js/inventory-intake.js?v=<%= locals.assetVersion || 0 %>"></script>
   <script>
-    // opens the restock/adjust modal, prefilled with the clicked ingredient.
-    function openRestockModal(id, name) {
-      document.getElementById('modalIngredientId').value = id;
-      document.getElementById('modalIngredientLabel').innerText = `Ingredient: ${name}`;
-      const modal = document.getElementById('restockModal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
+    let activeModalCost = 0;
+
+    function showToast(msg) {
+      const toast = document.getElementById('invToast');
+      const msgEl = document.getElementById('invToastMsg');
+      if (!toast || !msgEl) return;
+      msgEl.textContent = msg;
+      toast.classList.remove('translate-y-[-20px]', 'opacity-0', 'pointer-events-none');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-[-20px]', 'opacity-0', 'pointer-events-none');
+      }, 3000);
     }
 
-    // closes the modal without submitting.
+    function openRestockModal(id, name, unit, stock, cost) {
+      activeModalCost = parseFloat(cost) || 0;
+      document.getElementById('modalIngredientId').value = id || '';
+      document.getElementById('modalIngredientName').textContent = name || 'Ingredient';
+      document.getElementById('modalIngredientStock').textContent = `Current Stock: ${stock || '0.00'} ${unit || ''} | Cost: ₱${activeModalCost.toFixed(2)} / ${unit || ''}`;
+      document.getElementById('modalUnitLabel').textContent = unit || 'units';
+      document.getElementById('modalInputQty').value = '';
+      document.getElementById('modalCostPreview').textContent = '₱0.00';
+      
+      const restockRadio = document.querySelector('input[name="loss_category"][value="RESTOCK"]');
+      if (restockRadio) restockRadio.checked = true;
+      handleModalCategoryChange();
+
+      const modal = document.getElementById('restockModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
     function closeRestockModal() {
       const modal = document.getElementById('restockModal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
     }
 
-    // filters inventory rows live as you type. the matching itself lives in
-    // smart-search.js, so "ckng oil", "oil" and "coking oil" all find
-    // cooking Oil the same engine the POS and menu list use.
+    function handleModalCategoryChange() {
+      const selected = document.querySelector('input[name="loss_category"]:checked')?.value || 'RESTOCK';
+      const submitBtn = document.getElementById('modalSubmitBtn');
+      const costPreview = document.getElementById('modalCostPreview');
+
+      if (!submitBtn || !costPreview) return;
+
+      if (selected === 'RESTOCK') {
+        submitBtn.className = 'bg-papaGold hover:bg-yellow-500 text-black px-4 py-2 rounded font-semibold text-xs shadow transition';
+        submitBtn.textContent = 'Save Restock';
+        costPreview.className = 'text-xs font-normal text-white/80 mt-1 leading-none';
+      } else {
+        submitBtn.className = 'bg-red-800/90 hover:bg-red-700 text-white px-4 py-2 rounded font-semibold text-xs shadow transition';
+        submitBtn.textContent = 'Save Deduction';
+        costPreview.className = 'text-xs font-normal text-red-400 mt-1 leading-none';
+      }
+      updateModalCostPreview();
+    }
+
+    function updateModalCostPreview() {
+      const qty = parseFloat(document.getElementById('modalInputQty')?.value) || 0;
+      const total = qty * activeModalCost;
+      const preview = document.getElementById('modalCostPreview');
+      if (preview) preview.textContent = `₱${total.toFixed(2)}`;
+    }
+
     function filterInventory() {
       const query = document.getElementById('inventorySearch').value;
       const rows = document.querySelectorAll('#inventoryTable tbody tr');
-
       const shown = PapaSearch.applyToElements(query, rows);
       document.getElementById('inventoryEmpty').classList.toggle('hidden', shown > 0);
     }
 
-    // trigger search when pressing "enter" inside the input box
-    document.getElementById('inventorySearch').addEventListener('keypress', function (e) {
+    function filterHistory() {
+      const query = document.getElementById('historySearch')?.value || '';
+      const rows = document.querySelectorAll('#historyTable tbody tr');
+      const shown = PapaSearch.applyToElements(query, rows);
+      document.getElementById('historyEmpty')?.classList.toggle('hidden', shown > 0);
+    }
+
+    document.getElementById('inventorySearch').addEventListener('keypress', e => {
+      if (e.key === 'Enter') { e.preventDefault(); filterInventory(); }
+    });
+
+    document.getElementById('historySearch')?.addEventListener('keypress', e => {
+      if (e.key === 'Enter') { e.preventDefault(); filterHistory(); }
+    });
+
+    document.getElementById('ingredientSearchInput')?.addEventListener('keypress', e => {
       if (e.key === 'Enter') {
-        filterInventory();
+        e.preventDefault();
+        showIngredientDropdown();
+        filterIngredientDropdown();
       }
     });
   </script>
