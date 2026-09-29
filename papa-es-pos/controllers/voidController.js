@@ -12,7 +12,15 @@ async function recalcSale(conn, saleId) {
   const [[sale]] = await conn.execute('SELECT id, discount_type, discount_value, payment_method, cash_received FROM sales WHERE id = ?', [saleId]);
   if (!sale) throw new Error('Sale not found: ' + saleId);
 
-  const [items] = await conn.execute('SELECT id, menu_item_id, item_name, quantity, voided_qty, unit_price, discount_type, discount_value FROM sale_items WHERE sale_id = ? ORDER BY id', [saleId]);
+  const [items] = await conn.execute(
+    `SELECT si.id, si.menu_item_id, COALESCE(mi.item_name, 'Dish #' + si.menu_item_id) AS item_name,
+            si.quantity, si.voided_qty, si.unit_price, si.discount_type, si.discount_value
+     FROM sale_items si
+     LEFT JOIN menu_items mi ON mi.id = si.menu_item_id
+     WHERE si.sale_id = ?
+     ORDER BY si.id`,
+    [saleId]
+  );
 
   const totals = pricing.computeOrder({
     items: items.map((r) => ({ ...r, unit_price: Number(r.unit_price), quantity: Number(r.quantity), voided_qty: Number(r.voided_qty), discount_value: Number(r.discount_value) })),
@@ -134,16 +142,24 @@ async function voidSaleItem(req, res) {
   try {
     await conn.beginTransaction();
     for (const t of targets) {
-      const [[item]] = await conn.execute('SELECT * FROM sale_items WHERE id = ? AND sale_id = ? FOR UPDATE', [t.saleItemId, saleId]);
+      const [[item]] = await conn.execute(
+        `SELECT si.*, COALESCE(mi.item_name, 'Dish #' + si.menu_item_id) AS item_name
+         FROM sale_items si
+         LEFT JOIN menu_items mi ON mi.id = si.menu_item_id
+         WHERE si.id = ? AND si.sale_id = ? FOR UPDATE`,
+        [t.saleItemId, saleId]
+      );
       if (!item) continue;
       const actualVoid = Math.min(t.qty, item.quantity - item.voided_qty);
       if (actualVoid <= 0) continue;
+
+      const itemNameResolved = item.item_name || 'Dish Item';
 
       await conn.execute('UPDATE sale_items SET voided_qty = voided_qty + ? WHERE id = ?', [actualVoid, t.saleItemId]);
       await conn.execute(
         `INSERT INTO void_requests (sale_id, sale_item_id, menu_item_id, item_name, request_type, void_qty, unit_price, line_amount, reason, status, requested_by, authorized_by)
          VALUES (?, ?, ?, ?, 'VOID_ITEM', ?, ?, ?, ?, 'APPROVED', ?, ?)`,
-        [saleId, t.saleItemId, item.menu_item_id, item.item_name, actualVoid, item.unit_price, pricing.round2(item.unit_price * actualVoid), why, req.session.user.id, authorizer.id]
+        [saleId, t.saleItemId, item.menu_item_id, itemNameResolved, actualVoid, item.unit_price, pricing.round2(item.unit_price * actualVoid), why, req.session.user.id, authorizer.id]
       );
     }
 
