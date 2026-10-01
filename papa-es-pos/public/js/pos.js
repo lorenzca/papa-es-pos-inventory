@@ -1,7 +1,6 @@
 (function () {
   const CONTEXT = window.POS_CONTEXT || {};
   const pricing = window.PapaPricing;
-
   const QUICK_CASH = [50, 100, 200, 500, 1000];
   const DIGITAL_METHODS = ['GCASH', 'MAYA'];
 
@@ -12,13 +11,13 @@
   let paymentMethod = 'CASH';
   let orderDiscountType = 'NONE';
   let paymentConfirmed = false;
+  let discountVerified = false;
   let cashEntry = '';
   let pendingCount = Number(CONTEXT.pendingVoidCount) || 0;
   let cachedAuthorizers = [];
 
   let currentOpenSaleId = null;
   let currentTableNumber = '';
-
   let discountTargetIndex = null;
   let lineDiscountType = 'NONE';
   let voidTargetIndex = null;
@@ -38,20 +37,17 @@
     });
   }
 
-  function showModal(id) {
+  function setModal(id, show) {
     const m = el(id);
-    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
-  }
-
-  function hideModal(id) {
-    const m = el(id);
-    if (m) { m.classList.add('hidden'); m.classList.remove('flex'); }
+    if (!m) return;
+    m.classList.toggle('hidden', !show);
+    m.classList.toggle('flex', show);
   }
 
   function say(message, tone) {
     const target = el('result');
     if (!target) return;
-    target.className = 'text-sm ' + (tone === 'ok' ? 'text-green-300' : tone === 'warn' ? 'text-papaGold' : 'text-red-300');
+    target.className = 'text-xs ' + (tone === 'ok' ? 'text-green-300' : tone === 'warn' ? 'text-papaGold' : 'text-red-300');
     target.textContent = message || '';
   }
 
@@ -65,9 +61,7 @@
   }
 
   // ---- Cart Calculations & Render -----------------------------------------
-  function orderDiscountValue() {
-    return needsKeyedValue(orderDiscountType) ? Number(el('orderDiscountValue').value) || 0 : 0;
-  }
+  const orderDiscountValue = () => needsKeyedValue(orderDiscountType) ? Number(el('orderDiscountValue').value) || 0 : 0;
 
   function totals() {
     return pricing.computeOrder({
@@ -82,15 +76,7 @@
     if (existing) {
       existing.quantity += 1;
     } else {
-      cart.push({
-        menu_item_id: item.menu_item_id,
-        item_name: item.item_name,
-        unit_price: item.unit_price,
-        quantity: 1,
-        voided_qty: 0,
-        discount_type: 'NONE',
-        discount_value: 0
-      });
+      cart.push({ ...item, quantity: 1, voided_qty: 0, discount_type: 'NONE', discount_value: 0 });
     }
     render();
   }
@@ -117,10 +103,9 @@
 
   function renderCart() {
     const list = el('cartList');
-    const computed = totals();
     list.innerHTML = '';
 
-    computed.lines.forEach((line, index) => {
+    totals().lines.forEach((line, index) => {
       const discountLabel = describeDiscount(line.discount_type, line.discount_value);
       const row = document.createElement('div');
       row.className = 'cart-line' + (line.active_qty === 0 ? ' is-voided' : '');
@@ -152,8 +137,7 @@
     el('cartEmpty').classList.toggle('hidden', cart.length > 0);
   }
 
-  function renderTotals(computed) {
-    const sums = computed || totals();
+  function renderTotals(sums = totals()) {
     el('subtotalAmount').textContent = peso(sums.subtotal_amount);
     el('lineDiscountAmount').textContent = '−' + peso(sums.line_discount_total);
     el('discountAmount').textContent = '−' + peso(sums.order_discount_amount);
@@ -162,15 +146,19 @@
     el('lineDiscountRow').classList.toggle('hidden', sums.line_discount_total <= 0);
     el('orderDiscountRow').classList.toggle('hidden', sums.order_discount_amount <= 0);
 
-    if (el('vatRemovedAmount')) el('vatRemovedAmount').textContent = '−' + peso(sums.vat_removed_total || 0);
     if (el('vatRemovedRow')) el('vatRemovedRow').classList.toggle('hidden', (sums.vat_removed_total || 0) <= 0);
-    if (el('vatableSales')) el('vatableSales').textContent = peso(sums.vatable_sales || 0);
-    if (el('vatAmount')) el('vatAmount').textContent = peso(sums.vat_amount || 0);
-    if (el('vatExemptSales')) el('vatExemptSales').textContent = peso(sums.vat_exempt_sales || 0);
-    if (el('vatExemptRow')) el('vatExemptRow').classList.toggle('hidden', (sums.vat_exempt_sales || 0) <= 0);
+    if (el('vatRemovedAmount')) el('vatRemovedAmount').textContent = '−' + peso(sums.vat_removed_total || 0);
 
     const hasSeniorOrPwd = orderDiscountType === 'SENIOR' || orderDiscountType === 'PWD' || cart.some(l => l.discount_type === 'SENIOR' || l.discount_type === 'PWD');
     el('discountIdRow').classList.toggle('hidden', !hasSeniorOrPwd);
+
+    const verifyPill = el('discountVerifyPill');
+    const verifyBtn = el('confirmDiscountVerifyBtn');
+    if (verifyPill && verifyBtn) {
+      verifyPill.textContent = discountVerified ? 'Verified' : 'Unverified';
+      verifyPill.className = 'pill ' + (discountVerified ? 'pill-confirmed' : 'pill-pending');
+      verifyBtn.textContent = discountVerified ? 'Undo ID Verification' : 'Verify Physical ID';
+    }
 
     const label = describeDiscount(sums.order_discount_type, sums.order_discount_value);
     el('orderDiscountLabel').textContent = label ? 'Order discount (' + label + ')' : 'Order discount';
@@ -181,22 +169,14 @@
     const tender = pricing.changeFor(sums.total_amount, cashEntry === '' ? 0 : Number(cashEntry));
     const target = el('changeAmount');
 
-    if (paymentMethod !== 'CASH') {
+    if (paymentMethod !== 'CASH' || cashEntry === '') {
       target.textContent = peso(0);
-      target.className = 'font-bold';
+      target.className = 'font-bold text-sm';
       return tender;
     }
 
-    if (cashEntry === '') {
-      target.textContent = peso(0);
-      target.className = 'font-bold';
-    } else if (tender.settled) {
-      target.textContent = peso(tender.change);
-      target.className = 'font-bold text-papaGold';
-    } else {
-      target.textContent = 'short ' + peso(tender.short);
-      target.className = 'font-bold text-red-300';
-    }
+    target.textContent = tender.settled ? peso(tender.change) : 'short ' + peso(tender.short);
+    target.className = 'font-bold text-sm ' + (tender.settled ? 'text-papaGold' : 'text-red-300');
     return tender;
   }
 
@@ -222,7 +202,7 @@
 
   function renderPaymentState(sums) {
     const isCash = paymentMethod === 'CASH';
-    const isDigital = DIGITAL_METHODS.indexOf(paymentMethod) >= 0;
+    const isDigital = DIGITAL_METHODS.includes(paymentMethod);
 
     el('cashSection').classList.toggle('hidden', !isCash);
     el('digitalSection').classList.toggle('hidden', !isDigital);
@@ -247,8 +227,10 @@
     const tender = renderChange(sums);
     const cashOk = !isCash || (cashEntry !== '' && tender.settled);
     const confirmOk = isCash || paymentConfirmed;
+    const hasSeniorOrPwd = orderDiscountType === 'SENIOR' || orderDiscountType === 'PWD' || cart.some(l => l.discount_type === 'SENIOR' || l.discount_type === 'PWD');
+    const discountOk = !hasSeniorOrPwd || discountVerified;
 
-    el('completeOrderBtn').disabled = !(sums.active_line_count > 0 && cashOk && confirmOk);
+    el('completeOrderBtn').disabled = !(sums.active_line_count > 0 && cashOk && confirmOk && discountOk);
     if (el('holdOrderBtn')) el('holdOrderBtn').disabled = !(sums.active_line_count > 0);
   }
 
@@ -270,9 +252,9 @@
   // ---- Keypad & Cash ------------------------------------------------------
   function cashKey(key) {
     if (key === '.') {
-      if (cashEntry.indexOf('.') >= 0) return;
+      if (cashEntry.includes('.')) return;
       cashEntry = (cashEntry || '0') + '.';
-    } else if (cashEntry.indexOf('.') >= 0 && cashEntry.split('.')[1].length >= 2) {
+    } else if (cashEntry.includes('.') && cashEntry.split('.')[1].length >= 2) {
       return;
     } else {
       cashEntry = (cashEntry === '0' ? '' : cashEntry) + key;
@@ -292,6 +274,11 @@
     render();
   }
 
+  function toggleDiscountVerified() {
+    discountVerified = !discountVerified;
+    render();
+  }
+
   // ---- Line Discount Modal ------------------------------------------------
   function renderLineDiscountModal() {
     const line = cart[discountTargetIndex];
@@ -302,11 +289,8 @@
 
     const val = needsKeyedValue(lineDiscountType) ? Number(el('lineDiscountValue').value) || 0 : 0;
     const preview = pricing.computeLine({
-      unit_price: line.unit_price,
-      quantity: line.quantity,
-      voided_qty: line.voided_qty,
-      discount_type: lineDiscountType,
-      discount_value: val
+      unit_price: line.unit_price, quantity: line.quantity,
+      voided_qty: line.voided_qty, discount_type: lineDiscountType, discount_value: val
     });
 
     el('lineDiscountPreview').textContent = lineDiscountType === 'NONE'
@@ -322,11 +306,11 @@
     el('lineDiscountValue').value = line.discount_value || 0;
     el('lineDiscountItem').textContent = line.item_name + ' — ' + peso(line.unit_price) + ' × ' + line.quantity;
     renderLineDiscountModal();
-    showModal('lineDiscountModal');
+    setModal('lineDiscountModal', true);
   }
 
   function closeLineDiscount() {
-    hideModal('lineDiscountModal');
+    setModal('lineDiscountModal', false);
     discountTargetIndex = null;
   }
 
@@ -353,15 +337,14 @@
       ? 'Authorize with your manager PIN on the next screen.'
       : 'A manager or owner must key their PIN to authorize this void.';
     el('voidQty').value = 1;
-    el('voidQty').max = remaining;
     el('voidReason').value = '';
     el('voidError').textContent = '';
     setActive(el('voidReasonGroup'), 'data-void-reason', '');
-    showModal('voidModal');
+    setModal('voidModal', true);
   }
 
   function closeVoidModal() {
-    hideModal('voidModal');
+    setModal('voidModal', false);
     voidTargetIndex = null;
   }
 
@@ -438,9 +421,7 @@
       try {
         const res = await fetch('/void/pending', { headers: { Accept: 'application/json' } });
         const data = await res.json();
-        if (Array.isArray(data.authorizers)) {
-          cachedAuthorizers = data.authorizers;
-        }
+        if (Array.isArray(data.authorizers)) cachedAuthorizers = data.authorizers;
       } catch (e) { /* ignore */ }
     }
 
@@ -460,31 +441,25 @@
     el('pinError').textContent = '';
     await populateAuthorizerDropdown();
     if (el('pinAuthorizerSelect')) el('pinAuthorizerSelect').value = '';
-    showModal('pinModal');
+    setModal('pinModal', true);
   }
 
   function closePinModal() {
-    hideModal('pinModal');
+    setModal('pinModal', false);
     activeRequest = null;
   }
 
-  function pinKey(k) { if (el('pinInput').value.length < 6) el('pinInput').value += k; }
-  function pinBackspace() { el('pinInput').value = el('pinInput').value.slice(0, -1); }
-  function pinClear() { el('pinInput').value = ''; }
+  const pinKey = (k) => { if (el('pinInput').value.length < 6) el('pinInput').value += k; };
+  const pinBackspace = () => { el('pinInput').value = el('pinInput').value.slice(0, -1); };
+  const pinClear = () => { el('pinInput').value = ''; };
 
   async function decideVoid(decision) {
     if (!activeRequest) return;
     const authorizerId = el('pinAuthorizerSelect') ? el('pinAuthorizerSelect').value : '';
-    if (!authorizerId) {
-      el('pinError').textContent = 'Select an authorizing manager.';
-      return;
-    }
+    if (!authorizerId) return el('pinError').textContent = 'Select an authorizing manager.';
 
     const pin = el('pinInput').value;
-    if (pin.length < 4) {
-      el('pinError').textContent = 'Enter the 4-6 digit manager PIN.';
-      return;
-    }
+    if (pin.length < 4) return el('pinError').textContent = 'Enter the 4-6 digit manager PIN.';
 
     const req = activeRequest;
     try {
@@ -534,9 +509,7 @@
       const res = await fetch('/void/pending', { headers: { Accept: 'application/json' } });
       const data = await res.json();
       setPendingCount(data.pendingCount);
-      if (Array.isArray(data.authorizers)) {
-        cachedAuthorizers = data.authorizers;
-      }
+      if (Array.isArray(data.authorizers)) cachedAuthorizers = data.authorizers;
 
       if (!data.requests.length) {
         list.innerHTML = '<p class="text-sm text-white/50">Nothing is waiting for approval.</p>';
@@ -565,8 +538,8 @@
     }
   }
 
-  function openApprovals() { showModal('approvalsModal'); loadApprovals(); }
-  function closeApprovals() { hideModal('approvalsModal'); }
+  const openApprovals = () => { setModal('approvalsModal', true); loadApprovals(); };
+  const closeApprovals = () => setModal('approvalsModal', false);
 
   // ---- Table Tabs (Hold & Recall) -----------------------------------------
   async function refreshActiveTablesBadge() {
@@ -584,7 +557,7 @@
   async function openActiveTablesModal() {
     const list = el('activeTablesList');
     list.innerHTML = '<p class="text-white/50 text-xs">Loading active tables…</p>';
-    showModal('activeTablesModal');
+    setModal('activeTablesModal', true);
     try {
       const res = await fetch('/pos/active-tables');
       const data = await res.json();
@@ -630,7 +603,7 @@
       currentTableNumber = tableNumber;
       orderType = 'DINE_IN';
       if (el('tableNumberSelect')) el('tableNumberSelect').value = tableNumber;
-      hideModal('activeTablesModal');
+      setModal('activeTablesModal', false);
       say(`Loaded ${tableNumber}. Ready to add items or settle.`, 'ok');
       render();
     } catch (e) {
@@ -638,7 +611,7 @@
     }
   }
 
-  function closeActiveTablesModal() { hideModal('activeTablesModal'); }
+  const closeActiveTablesModal = () => setModal('activeTablesModal', false);
 
   async function holdOrderToKitchen() {
     const sums = totals();
@@ -672,15 +645,12 @@
       if (!res.ok) return say(data.message || 'Failed to hold order.', 'error');
       say(data.message, 'ok');
 
-      // Auto-open Kitchen Prep Slip print dialog
       const targetSaleId = data.saleId || data.id || (data.sale && data.sale.id) || currentOpenSaleId;
       const targetUrl = data.receiptUrl 
         ? `${data.receiptUrl}&type=kitchen&autoprint=1` 
         : (targetSaleId ? `/receipt/${targetSaleId}?type=kitchen&autoprint=1` : null);
 
-      if (targetUrl) {
-        window.open(targetUrl, '_blank', 'width=420,height=720');
-      }
+      if (targetUrl) window.open(targetUrl, '_blank', 'width=420,height=720');
 
       clearOrder();
       refreshActiveTablesBadge();
@@ -699,19 +669,19 @@
     currentTableNumber = '';
     clientOrderRef = 'ORDER-' + Date.now();
     orderDiscountType = 'NONE';
+    paymentConfirmed = false;
+    discountVerified = false;
+    cashEntry = '';
+
     el('orderDiscountValue').value = 0;
     setActive(el('orderDiscountGroup'), 'data-discount-type', 'NONE');
     el('orderDiscountValueRow').classList.add('hidden');
     el('discountIdRow').classList.add('hidden');
-    el('discountIdName').value = '';
-    el('discountIdNumber').value = '';
     el('orderNote').value = '';
     el('paymentRef').value = '';
     el('cardRef').value = '';
     if (el('tableNumberSelect')) el('tableNumberSelect').value = '';
-    cashEntry = '';
     el('cashReceived').value = '';
-    paymentConfirmed = false;
     render();
   }
 
@@ -755,8 +725,8 @@
           orderNote: el('orderNote').value,
           discountType: orderDiscountType,
           discountValue: orderDiscountValue(),
-          discountIdName: el('discountIdName').value,
-          discountIdNumber: el('discountIdNumber').value
+          discountIdName: discountVerified ? (orderDiscountType === 'SENIOR' ? 'SENIOR CITIZEN' : 'PWD') : '',
+          discountIdNumber: discountVerified ? 'VERIFIED' : ''
         })
       });
       const data = await res.json();
@@ -813,6 +783,7 @@
     const btn = e.target.closest('[data-discount-type]');
     if (!btn) return;
     orderDiscountType = btn.getAttribute('data-discount-type');
+    discountVerified = false;
     setActive(el('orderDiscountGroup'), 'data-discount-type', orderDiscountType);
     const keyed = needsKeyedValue(orderDiscountType);
     el('orderDiscountValueRow').classList.toggle('hidden', !keyed);
@@ -827,8 +798,7 @@
     btn.addEventListener('click', () => {
       const step = Number(btn.getAttribute('data-order-discount-step'));
       const input = el('orderDiscountValue');
-      const size = orderDiscountType === 'AMOUNT' ? 5 : 1;
-      input.value = Math.max(0, (Number(input.value) || 0) + step * size);
+      input.value = Math.max(0, (Number(input.value) || 0) + step * (orderDiscountType === 'AMOUNT' ? 5 : 1));
       render();
     });
   });
@@ -856,8 +826,7 @@
     btn.addEventListener('click', () => {
       const step = Number(btn.getAttribute('data-line-discount-step'));
       const input = el('lineDiscountValue');
-      const size = lineDiscountType === 'AMOUNT' ? 5 : 1;
-      input.value = Math.max(0, (Number(input.value) || 0) + step * size);
+      input.value = Math.max(0, (Number(input.value) || 0) + step * (lineDiscountType === 'AMOUNT' ? 5 : 1));
       renderLineDiscountModal();
     });
   });
@@ -878,7 +847,7 @@
     if (e.key !== 'Escape') return;
     ['pinModal', 'approvalsModal', 'voidModal', 'lineDiscountModal', 'activeTablesModal'].some((id) => {
       if (el(id).classList.contains('hidden')) return false;
-      hideModal(id);
+      setModal(id, false);
       return true;
     });
   });
@@ -890,26 +859,13 @@
   });
 
   // Global window bindings for pos.ejs inline handlers
-  window.completeOrder = completeOrder;
-  window.clearOrder = clearOrder;
-  window.detachActiveTable = detachActiveTable;
-  window.holdOrderToKitchen = holdOrderToKitchen;
-  window.openActiveTablesModal = openActiveTablesModal;
-  window.closeActiveTablesModal = closeActiveTablesModal;
-  window.cashKey = cashKey;
-  window.cashBackspace = cashBackspace;
-  window.togglePaymentConfirmed = togglePaymentConfirmed;
-  window.closeLineDiscount = closeLineDiscount;
-  window.applyLineDiscount = applyLineDiscount;
-  window.closeVoidModal = closeVoidModal;
-  window.submitVoidRequest = submitVoidRequest;
-  window.closePinModal = closePinModal;
-  window.pinKey = pinKey;
-  window.pinBackspace = pinBackspace;
-  window.pinClear = pinClear;
-  window.decideVoid = decideVoid;
-  window.openApprovals = openApprovals;
-  window.closeApprovals = closeApprovals;
+  Object.assign(window, {
+    completeOrder, clearOrder, detachActiveTable, holdOrderToKitchen,
+    openActiveTablesModal, closeActiveTablesModal, cashKey, cashBackspace,
+    togglePaymentConfirmed, toggleDiscountVerified, closeLineDiscount,
+    applyLineDiscount, closeVoidModal, submitVoidRequest, closePinModal,
+    pinKey, pinBackspace, pinClear, decideVoid, openApprovals, closeApprovals
+  });
 
   setPendingCount(pendingCount);
   refreshActiveTablesBadge();

@@ -34,7 +34,9 @@ async function getSaleById(saleId) {
 // gets the list of items inside an order
 async function getSaleItems(saleId) {
   const [rows] = await pool.execute(
-    `SELECT si.*, COALESCE(si.item_name, mi.item_name, 'Item') AS display_name
+    `SELECT si.*, 
+            mi.item_name, 
+            COALESCE(mi.item_name, 'Item') AS display_name
      FROM sale_items si
      LEFT JOIN menu_items mi ON mi.id = si.menu_item_id
      WHERE si.sale_id = ?

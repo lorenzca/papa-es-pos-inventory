@@ -255,7 +255,6 @@ function renderReceivingTable() {
       `<option value="${u.label}" ${it.selected_unit === u.label ? 'selected' : ''}>${u.label}</option>`
     ).join('');
 
-    // Price Spike Flag (+10% deviation)
     const isPriceSpike = it.historical_avg > 0 && it.input_cost > (it.historical_avg * 1.10);
     const alertBadge = isPriceSpike 
       ? `<span class="text-[9px] px-1 py-0.5 rounded bg-red-500/20 text-red-400 font-bold border border-red-500/30" title="Historical avg: ₱${it.historical_avg.toFixed(2)}">+10%</span>` 

@@ -27,9 +27,15 @@ async function postAdjustment(req, res) {
   const rawQty = Math.abs(Number(req.body.input_qty || req.body.qty || 0));
   const category = req.body.loss_category || req.body.movement_type || 'ADJUSTMENT';
   const userReason = String(req.body.reason || '').trim();
+  const userRole = req.session?.user?.role;
 
   if (!ingredientId || !rawQty || !userReason) {
     return res.status(400).send('Missing required fields.');
+  }
+
+  // Kitchen staff can log waste and deductions, but only managers/owners can post direct manual stock additions
+  if (category === 'RESTOCK' && !['OWNER', 'MANAGER'].includes(userRole)) {
+    return res.status(403).send('Unauthorized: Only managers and owners can post direct stock additions.');
   }
 
   const isAddition = category === 'RESTOCK';

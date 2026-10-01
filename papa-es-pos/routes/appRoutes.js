@@ -89,19 +89,21 @@ router.get('/void/pending', ensureAuthenticated, ensureRole(POS_ROLES), voidCont
 router.post('/void/request', ensureAuthenticated, ensureRole(POS_ROLES), voidController.postRequest);
 router.post('/void/:id/decide', ensureAuthenticated, ensureRole(POS_ROLES), voidController.postDecide);
 
-// inventory tracking and stock adjustments
+// inventory tracking and stock adjustments (kitchen can view and log waste/adjustments)
 router.get('/inventory', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getInventory);
 router.post('/inventory/adjust', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postAdjustment);
 
-// order guides & bulk receiving
+// order guides (kitchen can view guides to check par levels but cannot delete them)
 router.get('/api/inventory/order-guides', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getOrderGuides);
-router.delete('/api/inventory/order-guides/:id', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.deleteOrderGuide);
 router.get('/api/inventory/order-guides/:id/items', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getOrderGuideItems);
-router.get('/api/inventory/orders/pending', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getPendingOrders);
-router.get('/api/inventory/orders/:id', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.getOrderDetails);
-router.post('/api/inventory/orders/create', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postCreateOrder);
-router.post('/api/inventory/orders/:id/receive', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postReceiveExistingOrder);
-router.post('/api/inventory/receive', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER', 'KITCHEN']), inventoryController.postReceiveDelivery);
+router.delete('/api/inventory/order-guides/:id', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), inventoryController.deleteOrderGuide);
+
+// bulk receiving & supplier intake (restricted strictly to owner and manager)
+router.get('/api/inventory/orders/pending', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), inventoryController.getPendingOrders);
+router.get('/api/inventory/orders/:id', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), inventoryController.getOrderDetails);
+router.post('/api/inventory/orders/create', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), inventoryController.postCreateOrder);
+router.post('/api/inventory/orders/:id/receive', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), inventoryController.postReceiveExistingOrder);
+router.post('/api/inventory/receive', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), inventoryController.postReceiveDelivery);
 
 // menu item management and ingredient recipes
 router.get('/menu', ensureAuthenticated, ensureRole(['OWNER', 'MANAGER']), menuController.getMenu);

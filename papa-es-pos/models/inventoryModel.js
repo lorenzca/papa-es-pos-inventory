@@ -5,14 +5,11 @@ async function ensureOrderGuide(conn, { guideName, supplierName, items }) {
   if (!guideName || !guideName.trim()) return null;
   const trimmed = guideName.trim();
 
-  const [[areaRow]] = await conn.execute('SELECT id FROM storage_areas LIMIT 1');
-  const storageAreaId = areaRow ? areaRow.id : null;
-
   const [res] = await conn.execute(
-    `INSERT INTO order_guides (guide_name, supplier_name, storage_area_id) 
-     VALUES (?, ?, ?)
+    `INSERT INTO order_guides (guide_name, supplier_name) 
+     VALUES (?, ?)
      ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), supplier_name = COALESCE(VALUES(supplier_name), supplier_name)`,
-    [trimmed, supplierName || null, storageAreaId]
+    [trimmed, supplierName || null]
   );
 
   const guideId = res.insertId;
@@ -29,13 +26,13 @@ async function ensureOrderGuide(conn, { guideName, supplierName, items }) {
   return guideId;
 }
 
-// Get all ingredients with on-the-fly historical average cost
+// Get all ingredients with low-stock pinned to the top, then alphabetically
 async function getAllIngredients() {
   const [rows] = await pool.execute(
     `SELECT i.id, i.ingredient_name, i.unit_measure, i.stock_qty, i.reorder_level, i.unit_cost,
             COALESCE((SELECT AVG(unit_cost) FROM delivery_intake_items dii WHERE dii.ingredient_id = i.id), i.unit_cost) AS historical_avg
      FROM ingredients i 
-     ORDER BY i.ingredient_name`
+     ORDER BY (i.stock_qty <= i.reorder_level) DESC, i.ingredient_name ASC`
   );
   return rows;
 }
@@ -113,9 +110,8 @@ async function getLowStock() {
 // Fetch all saved order guides for dropdown
 async function getAllOrderGuides() {
   const [rows] = await pool.execute(
-    `SELECT og.id, og.guide_name, og.supplier_name, og.storage_area_id, sa.name AS area_name
+    `SELECT og.id, og.guide_name, og.supplier_name
      FROM order_guides og
-     LEFT JOIN storage_areas sa ON og.storage_area_id = sa.id
      GROUP BY og.guide_name
      ORDER BY og.guide_name ASC`
   );
