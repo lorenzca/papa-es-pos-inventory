@@ -52,6 +52,7 @@ papa-es-pos/
 │   │       └── maya.png
 │   │   └── PapaEs_Logo.png
 │   ├── js/
+│   │   ├── inventory-intake.js
 │   │   ├── pos.js
 │   │   ├── price.js
 │   │   ├── quick-jump.js
