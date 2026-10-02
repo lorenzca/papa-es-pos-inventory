@@ -570,14 +570,20 @@
     }
 
     function filterInventory() {
-      const query = (document.getElementById('inventorySearch')?.value || '').trim().toLowerCase();
+      const query = (document.getElementById('inventorySearch')?.value || '').trim();
       const rows = document.querySelectorAll('#inventoryTable tbody tr.inventory-row');
       let visible = 0;
 
       rows.forEach(row => {
         const isLow = row.getAttribute('data-is-low') === 'true';
-        const searchBlob = (row.getAttribute('data-search') || '').toLowerCase();
-        const matchesQuery = !query || searchBlob.includes(query);
+        const searchBlob = row.getAttribute('data-search') || '';
+
+        // Uses PapaSearch smart fuzzy logic if loaded, otherwise falls back to includes
+        const matchesQuery = !query || (
+          window.PapaSearch 
+            ? PapaSearch.matches(query, searchBlob) 
+            : searchBlob.toLowerCase().includes(query.toLowerCase())
+        );
         const matchesLow = !showingLowOnly || isLow;
 
         if (matchesQuery && matchesLow) {

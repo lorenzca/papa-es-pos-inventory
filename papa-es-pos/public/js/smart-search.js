@@ -114,12 +114,15 @@
       var candidate = 0;
 
       var compact = q.replace(/ /g, '');
+      var compactText = text.replace(/ /g, '');
+
       if (text === q) candidate = 1;
       else if (text.indexOf(q) === 0) candidate = 0.95;
       else if (text.indexOf(q) > 0) candidate = 0.85;
       else if (initials(text) === compact) candidate = 0.9;
       else if (initials(text).indexOf(compact) === 0) candidate = 0.8;
       else if (skeleton(text).replace(/ /g, '').indexOf(compact) === 0) candidate = 0.78;
+      else if (isSubsequence(compact, compactText)) candidate = 0.72;
 
       if (candidate === 0) {
         var queryTokens = q.split(' ');

@@ -118,6 +118,28 @@ async function getActiveTables(req, res) {
   }
 }
 
+// validate that all items have sufficient recipe ingredients in stock
+async function checkInventoryAvailability(conn, lines) {
+  for (const line of lines) {
+    const chargeableQty = Math.max(0, Number(line.quantity) - Number(line.voided_qty || 0));
+    if (chargeableQty <= 0) continue;
+
+    const [shortages] = await conn.query(
+      `SELECT i.ingredient_name, i.stock_qty, (r.qty_required * ?) AS required_qty
+       FROM recipes r
+       JOIN ingredients i ON i.id = r.ingredient_id
+       WHERE r.menu_item_id = ?
+         AND (i.stock_qty < (r.qty_required * ?))`,
+      [chargeableQty, line.menu_item_id, chargeableQty]
+    );
+
+    if (shortages && shortages.length > 0) {
+      const missing = shortages.map(s => `${s.ingredient_name} (needs ${Number(s.required_qty).toFixed(2)}, has ${Number(s.stock_qty).toFixed(2)})`).join(', ');
+      throw new Error(`Cannot process "${line.item_name || 'Item'}": Insufficient stock for ${missing}`);
+    }
+  }
+}
+
 // save an unpaid table tab to resume or pay later
 async function holdOrder(req, res) {
   const { openSaleId, cart, tableNumber, orderType = 'DINE_IN', orderNote } = req.body;
@@ -224,6 +246,8 @@ async function completeOrder(req, res) {
 
     if (totals.active_line_count === 0) throw new Error('Every line in this order is voided — nothing left to charge.');
 
+    await checkInventoryAvailability(conn, totals.lines);
+    
     const tender = pricing.changeFor(totals.total_amount, method === 'CASH' ? cashReceived : totals.total_amount);
     if (method === 'CASH' && !tender.settled) throw new Error(`Cash received is short by ₱${tender.short.toFixed(2)}.`);
 

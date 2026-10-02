@@ -2,11 +2,28 @@ const pool = require('../config/db');
 
 // gets all active menu for the pos grid
 async function getPOSItems() {
-  const [rows] = await pool.execute(
-    `SELECT id, item_name, category, parent_group, sub_category, sell_price, image_url, is_active
-     FROM menu_items 
-     WHERE is_active = 1
-     ORDER BY item_name`
+  const [rows] = await pool.query(
+    `SELECT 
+       m.id, 
+       m.item_name, 
+       m.category, 
+       m.parent_group, 
+       m.sub_category, 
+       m.sell_price, 
+       m.image_url, 
+       m.is_active,
+       CASE 
+         WHEN COUNT(r.id) = 0 THEN 1
+         WHEN MIN(FLOOR(i.stock_qty / r.qty_required)) > 0 THEN 1
+         ELSE 0
+       END AS is_available,
+       COALESCE(MIN(FLOOR(i.stock_qty / r.qty_required)), 999) AS max_servings
+     FROM menu_items m
+     LEFT JOIN recipes r ON r.menu_item_id = m.id
+     LEFT JOIN ingredients i ON i.id = r.ingredient_id
+     WHERE m.is_active = 1
+     GROUP BY m.id
+     ORDER BY m.item_name ASC`
   );
   return rows;
 }

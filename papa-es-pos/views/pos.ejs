@@ -69,15 +69,25 @@
 
       <div class="lg:flex-1 lg:overflow-y-auto pr-1">
         <div id="menuGrid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 pb-3">
-          <% items.forEach((row) => { %>
+          <% items.forEach((row) => { 
+               const isOutOfStock = Number(row.is_available) === 0 || Number(row.max_servings) <= 0;
+          %>
             <button type="button"
-                    class="menu-card text-left p-2.5 rounded-lg"
+                    class="menu-card relative text-left p-2.5 rounded-lg transition <%= isOutOfStock ? 'opacity-40 border border-red-900/60 bg-slate-900/70 is-out-of-stock' : '' %>"
                     data-id="<%= row.id %>"
                     data-name="<%= row.item_name %>"
                     data-price="<%= Number(row.sell_price) %>"
+                    data-available="<%= isOutOfStock ? '0' : '1' %>"
                     data-raw-parent="<%= groupOf(row) %>"
                     data-sub="<%= subOf(row) %>"
                     data-search="<%= row.item_name %> | <%= groupOf(row) %> <%= subOf(row) %> <%= row.category || '' %>">
+              
+              <% if (isOutOfStock) { %>
+                <span class="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white uppercase tracking-wider z-20 shadow">
+                  Out of Stock
+                </span>
+              <% } %>
+
               <span class="card-thumb">
                 <span class="card-thumb-fallback"><%= initialsOf(row.item_name) %></span>
                 <% if (row.image_url) { %>

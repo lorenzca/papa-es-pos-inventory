@@ -744,10 +744,17 @@
     }
   }
 
-  // ---- Wiring -------------------------------------------------------------
+  // wiring
   document.addEventListener('click', (event) => {
     const card = event.target.closest('#menuGrid .menu-card');
     if (!card) return;
+
+    // block out of stock items and show an inline message below the settle buttons
+    if (card.getAttribute('data-available') === '0' || card.classList.contains('is-out-of-stock')) {
+      say(`"${card.getAttribute('data-name')}" is unavailable (missing ingredients).`, 'warn');
+      return;
+    }
+
     addToCart({
       menu_item_id: Number(card.getAttribute('data-id')),
       item_name: card.getAttribute('data-name'),
