@@ -72,7 +72,6 @@
         '  </span>',
         '  <span class="palette-row-tail">',
         isCurrent(target) ? '<span class="palette-tag">here</span>' : '',
-        '    <span class="kbd">↵</span>',
         '  </span>',
         '</a>'
       ].join('');
