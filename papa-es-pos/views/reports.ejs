@@ -229,7 +229,7 @@
               <td class="text-right font-semibold <%= row.status === 'OUT' ? 'text-red-300' : 'text-papaGold' %>"><%= Number(row.stock_qty).toFixed(2) %></td>
               <td><%= row.unit_measure %></td>
               <td class="text-right"><%= Number(row.reorder_level).toFixed(2) %></td>
-              <td class="text-right"><Math class="max" data-val="0"></Math>Math.max(0, Number(row.reorder_level) - Number(row.stock_qty)).toFixed(2) %></td>
+              <td class="text-right"><%= Math.max(0, Number(row.reorder_level || 0) - Number(row.stock_qty || 0)).toFixed(2) %></td>
               <td class="text-xs <%= row.status === 'OUT' ? 'text-red-300' : 'text-papaGold' %>"><%= row.status %></td>
               <td class="text-right"><a href="/inventory" class="mini-btn">Restock</a></td>
             </tr>
