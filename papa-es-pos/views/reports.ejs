@@ -4,6 +4,10 @@
   <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reports</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/air-datepicker@3.5.3/air-datepicker.css" />
+  <script src="https://cdn.jsdelivr.net/npm/air-datepicker@3.5.3/air-datepicker.js"></script>
+
   <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
   <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
 </head>
@@ -18,7 +22,6 @@
     <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
   </nav>
 
-  <%# panel picker ------------------------------------------------------------------------------------ %>
   <section class="card-panel p-4 mb-4">
     <p class="text-xs uppercase tracking-wide text-white/50 mb-2">Choose a report</p>
     <div class="flex flex-wrap gap-2">
@@ -39,7 +42,8 @@
       <% if (panel === 'receipts') { %>
         <form method="GET" action="/reports" class="flex flex-wrap items-center gap-2">
           <input type="hidden" name="panel" value="receipts" />
-          <input type="date" name="date" value="<%= date %>" class="bg-slate-800 border border-slate-700 rounded p-2 text-sm" />
+          <input type="text" id="reportDatePicker" name="date" value="<%= date %>" placeholder="Pick Date" readonly autocomplete="off"
+                 class="bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white cursor-pointer focus:border-papaGold focus:outline-none w-36" />
           <input type="text" name="q" value="<%= query %>" placeholder="OR number or cashier"
                  class="bg-slate-800 border border-slate-700 rounded p-2 text-sm min-w-[200px]" />
           <button class="bg-papaGold text-black font-semibold text-sm px-3 py-2 rounded">Search</button>
@@ -47,7 +51,8 @@
       <% } else if (panel !== 'stock') { %>
         <form method="GET" action="/reports" class="flex items-center gap-2">
           <input type="hidden" name="panel" value="<%= panel %>" />
-          <input type="date" name="date" value="<%= date %>" class="bg-slate-800 border border-slate-700 rounded p-2 text-sm" />
+          <input type="text" id="reportDatePicker" name="date" value="<%= date %>" placeholder="Pick Date" readonly autocomplete="off"
+                 class="bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white cursor-pointer focus:border-papaGold focus:outline-none w-36" />
           <button class="bg-papaGold text-black font-semibold text-sm px-3 py-2 rounded">Show</button>
         </form>
       <% } %>
@@ -243,7 +248,6 @@
     <% } %>
   </section>
 
-  <%# post sale void ((whole order or selected dishes)) ----------------------------------------------- %>
   <div id="postSaleVoidModal" class="modal-backdrop hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
     <div class="card-panel bg-slate-900 border border-slate-700 p-5 rounded-lg w-full max-w-md space-y-4 shadow-2xl">
       <div class="flex justify-between items-center">
@@ -251,21 +255,17 @@
         <button type="button" onclick="closeSaleVoidModal()" class="text-white/50 hover:text-white">✕</button>
       </div>
 
-      <%# entire order vs selected dishes %>
       <div class="grid grid-cols-2 gap-2">
         <button type="button" id="typeEntireBtn" class="seg-btn is-active py-2" onclick="setPostSaleVoidMode('ORDER')">Entire Order</button>
         <button type="button" id="typeDishBtn" class="seg-btn py-2" onclick="setPostSaleVoidMode('ITEM')">Selected Dishes</button>
       </div>
 
-      <%# multi checklist container (food) %>
       <div id="dishSelectionSection" class="hidden space-y-2">
         <label class="text-xs uppercase tracking-wide text-white/50 block">Select Dishes to Void</label>
         <div id="voidItemList" class="max-h-48 overflow-y-auto space-y-2 pr-1 border border-slate-700/60 rounded p-2 bg-slate-800/40">
-          <!-- Populated dynamically via JS -->
         </div>
       </div>
 
-      <%# reason %>
       <div>
         <label class="text-xs uppercase tracking-wide text-white/50 block mb-1">Reason</label>
         <div class="grid grid-cols-2 gap-2 mb-2">
@@ -278,7 +278,6 @@
                class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-papaGold focus:outline-none" />
       </div>
 
-      <%# authorizing manager selection %>
       <div>
         <label for="postSaleAuthorizerSelect" class="text-xs uppercase tracking-wide text-white/50 block mb-1">Authorizing Manager</label>
         <select id="postSaleAuthorizerSelect" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-papaGold focus:outline-none">
@@ -286,7 +285,6 @@
         </select>
       </div>
 
-      <%# manager PIN pad %>
       <div>
         <label class="text-xs uppercase tracking-wide text-white/50 block mb-1">Manager PIN</label>
         <input type="password" id="postSalePin" maxlength="6" readonly placeholder="••••"
@@ -312,9 +310,35 @@
 
   <script>
     let activeSaleId = null;
-    let voidMode = 'ORDER'; // order or item
+    let voidMode = 'ORDER';
     let currentSaleItems = [];
     let cachedAuthorizers = [];
+
+    const enLocale = {
+      days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      daysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      daysMin: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+      months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+      monthsShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+      today: 'Today',
+      clear: 'Clear',
+      dateFormat: 'yyyy-MM-dd',
+      firstDay: 0
+    };
+
+    document.querySelectorAll('#reportDatePicker').forEach(el => {
+      const defaultDateStr = el.value || '<%= date %>';
+      const initialDate = defaultDateStr ? new Date(defaultDateStr + 'T00:00:00') : new Date();
+
+      new AirDatepicker(el, {
+        locale: (window.AirDatepicker && AirDatepicker.locales && AirDatepicker.locales.en) || enLocale,
+        dateFormat: 'yyyy-MM-dd',
+        autoClose: true,
+        view: 'days',
+        minView: 'days',
+        selectedDates: [initialDate]
+      });
+    });
 
     function setReasonText(text) {
       document.getElementById('postSaleReason').value = text;
@@ -391,7 +415,6 @@
           const available = item.quantity - (item.voided_qty || 0);
           if (available > 0) {
             count++;
-            // Fallback resolution prevents rendering "null" if column names vary
             const displayName = item.item_name || item.name || item.dish_name || ('Dish #' + (item.menu_item_id || item.id));
 
             const row = document.createElement('div');

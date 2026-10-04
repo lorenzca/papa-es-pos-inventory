@@ -19,14 +19,15 @@
 <body class="text-white p-4 md:p-6 bg-slate-900 min-h-screen flex flex-col pb-20 lg:pb-6">
   <%- include('partials/header', { user, pageTitle: 'Point of Sale' }) %>
 
-  <nav class="mb-3 flex flex-wrap gap-2 text-sm">
+  <nav class="w-full mb-4 flex flex-wrap gap-2 text-sm">
     <% if (user && ['OWNER','MANAGER'].includes(user.role)) { %>
-      <a href="/dashboard" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20">Dashboard</a>
-      <a href="/reports" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20">Reports</a>
+      <a href="/dashboard" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Dashboard</a>
+      <a href="/reports" class="px-3 py-2 rounded bg-white/10 hover:bg-white/20">Reports</a>
     <% } %>
-    <a href="/logout" class="px-3 py-1.5 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
+    <a href="/logout" class="px-3 py-2 rounded bg-red-800/80 hover:bg-red-700">Logout</a>
   </nav>
 
+  <!-- MAIN GRID STARTS AFTER </nav> -->
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 lg:h-[calc(100vh-140px)] items-start">
     <%
       const groupOf = (row) => String(row.parent_group || row.category || 'Others').trim() || 'Others';

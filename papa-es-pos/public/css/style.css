@@ -89,7 +89,6 @@ body {
   border-color: rgba(212, 175, 55, 0.4);
 }
 
-/* menu card thumbnail and image fallback tile */
 .card-thumb {
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -123,7 +122,6 @@ body {
   width: 100%;
 }
 
-/* small thumbnail for table rows */
 .card-thumb.card-thumb-sm {
   aspect-ratio: auto;
   height: 2.5rem;
@@ -146,7 +144,6 @@ table tbody td {
   padding-bottom: 0.45rem;
 }
 
-/* hidden and custom scrollbar utilities */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -174,7 +171,6 @@ table tbody td {
   background: rgba(212, 175, 55, 0.8);
 }
 
-/* touch controls for pos screen */
 .tab-btn,
 .seg-btn {
   align-items: center;
@@ -265,7 +261,6 @@ table tbody td {
   border-color: rgba(139, 0, 0, 0.7);
 }
 
-/* payment status badges */
 .pill {
   border-radius: 999px;
   font-size: 0.7rem;
@@ -286,7 +281,6 @@ table tbody td {
   color: #bbf7d0;
 }
 
-/* qr code display frame */
 .qr-frame {
   align-items: center;
   aspect-ratio: 1 / 1;
@@ -315,7 +309,6 @@ table tbody td {
   display: none;
 }
 
-/* quick jump modal and account trigger */
 .header-actions {
   align-items: center;
   display: flex;
@@ -402,7 +395,6 @@ table tbody td {
   white-space: nowrap;
 }
 
-/* command palette backdrop and dialog */
 .palette-backdrop {
   align-items: flex-start;
   background: rgba(2, 6, 23, 0.72);
@@ -553,4 +545,108 @@ table tbody td {
 
 .modal-backdrop.modal-backdrop-top {
   z-index: 70;
+}
+
+/* air datepicker custom styles */
+.air-datepicker {
+  --adp-background-color: #0f172a;
+  --adp-color: #f1f5f9;
+  --adp-color-secondary: #64748b;
+  --adp-border-color: #334155;
+  --adp-border-radius: 8px;
+  --adp-cell-border-radius: 6px;
+  --adp-cell-background-color-hover: #1e293b;
+  --adp-cell-background-color-selected: #d4af37;
+  --adp-cell-color-selected: #0f172a;
+  font-family: inherit;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+  border: 1px solid #334155;
+  z-index: 99999;
+}
+
+.air-datepicker--pointer {
+  background: #0f172a !important;
+  border-top: 1px solid #334155 !important;
+  border-right: 1px solid #334155 !important;
+}
+
+.air-datepicker-nav {
+  border-bottom: 1px solid #1e293b;
+  padding: 8px;
+}
+
+.air-datepicker-nav--title {
+  color: #d4af37 !important;
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.air-datepicker-nav--title:hover {
+  background: #1e293b;
+}
+
+.air-datepicker-nav--action svg {
+  stroke: #94a3b8;
+}
+
+.air-datepicker-nav--action:hover {
+  background: #1e293b;
+}
+
+.air-datepicker-body--day-name {
+  color: #94a3b8 !important;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.air-datepicker-cell.-day- {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.air-datepicker-cell.-other-month- {
+  color: #475569 !important;
+}
+
+.air-datepicker-cell.-current- {
+  color: #d4af37 !important;
+  font-weight: 700;
+}
+
+.air-datepicker-cell.-current-::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #d4af37;
+}
+
+.air-datepicker-cell.-selected- {
+  background: #d4af37 !important;
+  color: #000000 !important;
+  font-weight: 700;
+}
+
+.air-datepicker-cell.-selected-::after {
+  display: none;
+}
+
+.air-datepicker-cell.-month-,
+.air-datepicker-cell.-year- {
+  color: #f1f5f9;
+  font-size: 12px;
+}
+
+.air-datepicker-cell.-month-.-selected-,
+.air-datepicker-cell.-year-.-selected- {
+  background: #d4af37 !important;
+  color: #000000 !important;
+  font-weight: 700;
 }
