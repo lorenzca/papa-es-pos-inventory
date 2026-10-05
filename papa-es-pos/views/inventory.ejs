@@ -4,10 +4,15 @@
   <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inventory</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Air Datepicker CDN loaded BEFORE style.css so our theme overrides it -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/air-datepicker@3.5.3/air-datepicker.css" />
+  <script src="https://cdn.jsdelivr.net/npm/air-datepicker@3.5.3/air-datepicker.js"></script>
+
   <link rel="stylesheet" href="/css/style.css?v=<%= locals.assetVersion || 0 %>" />
   <script>tailwind.config={theme:{extend:{colors:{papaRed:'#8B0000',papaGold:'#D4AF37'}}}}</script>
 </head>
-<body class="text-white p-4 md:p-6">
+<body class="text-white p-4 md:p-6 bg-slate-900">
   <%- include('partials/header', { user, pageTitle: 'Inventory & Stock Control' }) %>
 
   <nav class="mb-4 flex flex-wrap gap-2 text-sm">
@@ -129,7 +134,6 @@
     <div id="view-intake" class="inv-view hidden space-y-4">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
         
-        <!-- Left Column: Receive Delivery / PO Form -->
         <div class="lg:col-span-7 xl:col-span-8 card-panel p-4 flex flex-col min-h-[75vh]">
           <div class="flex justify-between items-center border-b border-slate-700/60 pb-3 mb-4 shrink-0">
             <div>
@@ -160,7 +164,7 @@
             </div>
             <div id="expectedDateContainer">
               <label class="text-xs text-white/60 block mb-1">Expected Arrival</label>
-              <input type="date" id="expectedDateInput" class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white focus:border-papaGold focus:outline-none" />
+              <input type="text" id="expectedDateInput" placeholder="YYYY-MM-DD" autocomplete="off" readonly class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white focus:border-papaGold focus:outline-none cursor-pointer" />
             </div>
           </div>
 
@@ -239,7 +243,6 @@
           </div>
         </div>
 
-        <!-- Right Column: Queue & Recent Intakes -->
         <div class="lg:col-span-5 xl:col-span-4 space-y-4">
           <div class="card-panel p-4">
             <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-700/60">
@@ -305,19 +308,19 @@
         </div>
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-        <p class="text-xs text-white/50"><%= (locals.intakeHistory || []).length %> recorded receipt(s).</p>
-        <div class="flex flex-wrap items-center gap-2">
-          <input type="date" id="historyDateFilter" onchange="filterHistory()"
-                 class="h-8 px-2.5 text-xs bg-slate-800 text-white border border-slate-700 rounded focus:border-papaGold focus:outline-none" />
-          <input type="text" id="historySearch" oninput="filterHistory()" autocomplete="off"
-                 placeholder="Search supplier, item, or date..."
-                 class="h-8 px-3 text-xs bg-slate-800 text-white border border-slate-700 rounded focus:border-papaGold focus:outline-none w-56 sm:w-64" />
-          <button type="button" onclick="clearHistoryFilters()" 
-                  class="h-8 px-3 text-xs font-semibold rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition">
-            Clear
-          </button>
+          <p class="text-xs text-white/50"><%= (locals.intakeHistory || []).length %> recorded receipt(s).</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <input type="text" id="historyDateFilter" placeholder="Pick Date" autocomplete="off" readonly
+       class="h-8 px-2.5 text-xs bg-slate-800 text-white border border-slate-700 rounded focus:border-papaGold focus:outline-none cursor-pointer w-36" />
+            <input type="text" id="historySearch" oninput="filterHistory()" autocomplete="off"
+                   placeholder="Search supplier, item, or date..."
+                   class="h-8 px-3 text-xs bg-slate-800 text-white border border-slate-700 rounded focus:border-papaGold focus:outline-none w-56 sm:w-64" />
+            <button type="button" onclick="clearHistoryFilters()" 
+                    class="h-8 px-3 text-xs font-semibold rounded bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition">
+              Clear
+            </button>
+          </div>
         </div>
-      </div>
 
         <div class="w-full overflow-x-auto">
           <table class="w-full text-sm table-auto" id="historyTable">
@@ -389,7 +392,7 @@
       <form method="POST" action="/inventory/adjust" class="space-y-4">
         <input type="hidden" name="ingredient_id" id="modalIngredientId" />
 
-        <!-- Action Pills (Locked Equal Heights) -->
+        <!-- Action Pills -->
         <div>
           <label class="text-xs text-white/60 block mb-1.5">Action / Category</label>
           <div class="grid <%= user && ['OWNER', 'MANAGER'].includes(user.role) ? 'grid-cols-5' : 'grid-cols-4' %> gap-2">
@@ -432,7 +435,7 @@
           </div>
         </div>
 
-        <!-- Quantity & Value Impact (Pixel Aligned Heights) -->
+        <!-- Quantity & Value Impact -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <div>
             <label class="text-xs text-white/60 block mb-1.5">
@@ -448,32 +451,15 @@
               Est. Value Impact
             </label>
             <div class="w-full h-10 bg-black/30 border border-slate-700/60 px-3 rounded flex items-center">
-              <strong id="modalCostPreview" class="text-sm font-semibold text-white/90">₱0.00</strong>
+              <strong id="modalCostPreview" class="text-sm font-semibold text-papaGold">₱0.00</strong>
             </div>
-          </div>
-        </div>
-
-        <!-- Quantity & Impact -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <div>
-            <label class="text-xs text-white/60 block mb-1">
-              Quantity (<span id="modalUnitLabel">units</span>)
-            </label>
-            <input name="input_qty" id="modalInputQty" type="number" step="any" min="0.01" required 
-                   oninput="updateModalCostPreview()" placeholder="e.g. 0.5" 
-                   class="w-full bg-slate-800 border border-slate-700 text-white text-sm p-2 rounded focus:border-papaGold focus:outline-none"/>
-          </div>
-
-          <div class="bg-black/20 border border-slate-700/60 px-3 py-2 rounded flex flex-col justify-center h-[38px]">
-            <span class="text-[10px] uppercase tracking-wide text-white/40 leading-none">Est. Value Impact</span>
-            <strong id="modalCostPreview" class="text-xs font-normal text-white/80 mt-1 leading-none">₱0.00</strong>
           </div>
         </div>
 
         <div>
           <label class="text-xs text-white/60 block mb-1">Reason / Note</label>
           <input type="text" name="reason" required placeholder="e.g. Dropped during lunch rush, spoiled batch" 
-                 class="w-full bg-slate-800 border border-slate-700 text-white text-xs p-2 rounded focus:border-papaGold focus:outline-none"/>
+                 class="w-full h-10 bg-slate-800 border border-slate-700 text-white text-sm px-3 rounded focus:border-papaGold focus:outline-none"/>
         </div>
 
         <div class="flex justify-end gap-2 pt-2 border-t border-slate-700/60">
@@ -500,6 +486,44 @@
     let activeModalCost = 0;
     let showingLowOnly = false;
     const currentUserRole = '<%= user ? user.role : "" %>';
+
+    const enLocale = {
+      days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      daysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      daysMin: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+      months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+      monthsShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+      today: 'Today',
+      clear: 'Clear',
+      dateFormat: 'yyyy-MM-dd',
+      firstDay: 0
+    };
+
+    let historyDatePicker = null;
+
+    if (document.getElementById('historyDateFilter')) {
+      historyDatePicker = new AirDatepicker('#historyDateFilter', {
+        locale: (window.AirDatepicker && AirDatepicker.locales && AirDatepicker.locales.en) || enLocale,
+        dateFormat: 'yyyy-MM-dd',
+        autoClose: true,
+        view: 'days',
+        minView: 'days',
+        onSelect({ formattedDate }) {
+          document.getElementById('historyDateFilter').value = formattedDate || '';
+          filterHistory();
+        }
+      });
+    }
+
+    if (document.getElementById('expectedDateInput')) {
+      new AirDatepicker('#expectedDateInput', {
+        locale: (window.AirDatepicker && AirDatepicker.locales && AirDatepicker.locales.en) || enLocale,
+        dateFormat: 'yyyy-MM-dd',
+        autoClose: true,
+        view: 'days',
+        minView: 'days'
+      });
+    }
 
     function showToast(msg) {
       const toast = document.getElementById('invToast');
@@ -562,11 +586,11 @@
       if (selected === 'RESTOCK') {
         submitBtn.className = 'bg-papaGold hover:bg-yellow-500 text-black px-4 py-2 rounded font-semibold text-xs shadow transition';
         submitBtn.textContent = 'Save Restock';
-        costPreview.className = 'text-xs font-normal text-white/80 mt-1 leading-none';
+        costPreview.className = 'text-sm font-semibold text-papaGold';
       } else {
         submitBtn.className = 'bg-red-800/90 hover:bg-red-700 text-white px-4 py-2 rounded font-semibold text-xs shadow transition';
         submitBtn.textContent = 'Save Deduction';
-        costPreview.className = 'text-xs font-normal text-red-400 mt-1 leading-none';
+        costPreview.className = 'text-sm font-semibold text-red-400';
       }
       updateModalCostPreview();
     }
@@ -599,7 +623,6 @@
         const isLow = row.getAttribute('data-is-low') === 'true';
         const searchBlob = row.getAttribute('data-search') || '';
 
-        // Uses PapaSearch smart fuzzy logic if loaded, otherwise falls back to includes
         const matchesQuery = !query || (
           window.PapaSearch 
             ? PapaSearch.matches(query, searchBlob) 
@@ -625,7 +648,6 @@
       const dateVal = (document.getElementById('historyDateFilter')?.value || '').trim();
       const rawSearch = (document.getElementById('historySearch')?.value || '').trim().toLowerCase();
 
-      // Normalize "sept" to "sep" so typing "sept 26" or "sep 26" behaves identically
       const normalizedSearch = rawSearch.replace(/\bsept\b/g, 'sep');
       const searchTokens = normalizedSearch.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
 
@@ -633,19 +655,15 @@
       let visible = 0;
 
       rows.forEach(row => {
-        const rowDate = row.getAttribute('data-date') || ''; // e.g. "2026-09-26"
+        const rowDate = row.getAttribute('data-date') || '';
         const searchBlob = (row.getAttribute('data-search') || '').toLowerCase();
 
-        // calendar picker checker
         const matchesCalendar = !dateVal || rowDate === dateVal;
 
-        // text input tokens check
         const matchesTokens = searchTokens.length === 0 || searchTokens.every(token => {
-          // If the token is a 1 or 2 digit day (e.g. "26" or "5")
           if (/^\d{1,2}$/.test(token)) {
             const dayNum = parseInt(token, 10);
             const paddedDay = String(dayNum).padStart(2, '0');
-            // check if it matches the day in ISO date or as a standalone word
             const regex = new RegExp(`(^|\\D)${paddedDay}(\\D|$)`);
             return regex.test(rowDate) || new RegExp(`\\b${dayNum}\\b`).test(searchBlob);
           }
@@ -669,7 +687,10 @@
     function clearHistoryFilters() {
       const d = document.getElementById('historyDateFilter');
       const s = document.getElementById('historySearch');
-      if (d) d.value = '';
+      if (d) {
+        d.value = '';
+        if (historyDatePicker) historyDatePicker.clear();
+      }
       if (s) s.value = '';
       filterHistory();
     }
