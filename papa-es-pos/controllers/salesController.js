@@ -87,17 +87,23 @@ async function getDashboardTrend(req, res) {
   }
 }
 
-// render pos screen with active items and pending void count
+// render pos screen with active items, pending void count, and occupied tables
 async function getPOS(req, res) {
-  const [items, pendingVoidCount] = await Promise.all([
+  const [items, pendingVoidCount, [openRows]] = await Promise.all([
     salesModel.getPOSItems(),
-    voidModel.countPending()
+    voidModel.countPending(),
+    pool.execute(`SELECT table_number FROM sales WHERE status = 'OPEN' AND table_number IS NOT NULL`)
   ]);
+
+  // extract list of occupied table strings
+  const occupiedTables = openRows.map((r) => String(r.table_number).trim());
+
   res.render('pos', {
     user: req.session.user,
     items,
     canAuthorizeVoids: VOID_AUTHORIZER_ROLES.includes(req.session.user.role),
-    pendingVoidCount
+    pendingVoidCount,
+    occupiedTables
   });
 }
 

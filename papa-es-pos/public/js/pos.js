@@ -60,6 +60,33 @@
     return pricing.describeDiscount(kind, value);
   }
 
+  // ---- Dynamic Table Filtering --------------------------------------------
+  function updateTableDropdownAvailability(occupiedTables = []) {
+    const select = el('tableNumberSelect');
+    if (!select) return;
+
+    const busy = occupiedTables.map((t) =>
+      String(t).toLowerCase().replace('table', '').trim()
+    );
+
+    Array.from(select.options).forEach((opt) => {
+      if (!opt.value) return; // Keep "Select Table"
+      const optClean = opt.value.toLowerCase().replace('table', '').trim();
+
+      // if this is the tab currently loaded into cart, let it show
+      const isCurrentLoaded = currentOpenSaleId && currentTableNumber && 
+        currentTableNumber.toLowerCase().replace('table', '').trim() === optClean;
+
+      if (busy.includes(optClean) && !isCurrentLoaded) {
+        opt.hidden = true;
+        opt.disabled = true;
+      } else {
+        opt.hidden = false;
+        opt.disabled = false;
+      }
+    });
+  }
+
   // ---- Cart Calculations & Render -----------------------------------------
   const orderDiscountValue = () => needsKeyedValue(orderDiscountType) ? Number(el('orderDiscountValue').value) || 0 : 0;
 
@@ -241,8 +268,11 @@
     renderPaymentState(sums);
 
     if (el('loadedTableBanner')) {
-      el('loadedTableBanner').classList.toggle('hidden', !currentOpenSaleId);
-      if (currentOpenSaleId) el('loadedTableLabel').textContent = `Settling Tab: ${currentTableNumber}`;
+      const isLoaded = Boolean(currentOpenSaleId);
+      el('loadedTableBanner').classList.toggle('hidden', !isLoaded);
+      el('loadedTableBanner').classList.toggle('flex', isLoaded);
+      if (isLoaded) el('loadedTableLabel').textContent = `Settling Tab: ${currentTableNumber}`;
+      if (el('tableNumberSelect')) el('tableNumberSelect').disabled = isLoaded;
     }
     if (el('tableSelectContainer')) {
       el('tableSelectContainer').classList.toggle('hidden', orderType !== 'DINE_IN');
@@ -550,6 +580,10 @@
       if (badge && data.tables) {
         badge.textContent = data.tables.length;
         badge.classList.toggle('hidden', data.tables.length === 0);
+        
+        // hfide occupied tables from the dropdown
+        const occupied = data.tables.map((t) => t.table_number);
+        updateTableDropdownAvailability(occupied);
       }
     } catch (e) { /* ignore */ }
   }
@@ -605,6 +639,8 @@
       if (el('tableNumberSelect')) el('tableNumberSelect').value = tableNumber;
       setModal('activeTablesModal', false);
       say(`Loaded ${tableNumber}. Ready to add items or settle.`, 'ok');
+      await refreshActiveTablesBadge();
+      render();
       render();
     } catch (e) {
       say('Failed to load table items.', 'error');
@@ -689,6 +725,7 @@
     currentOpenSaleId = null;
     currentTableNumber = '';
     clearOrder();
+    refreshActiveTablesBadge();
     say('Switched to new order tab.', 'warn');
   }
 
