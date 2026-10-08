@@ -38,6 +38,19 @@
 
   <!-- TAB 1: CURRENT STOCK -->
   <div id="view-stock" class="inv-view block space-y-4">
+    <%
+      function formatStock(val, unit) {
+        const n = Number(val) || 0;
+        const u = String(unit || '').toLowerCase().trim();
+        if (u === 'g' && n >= 1000) {
+          return { qty: (n / 1000).toFixed(2), unit: 'kg', original: `${n.toLocaleString()} g` };
+        }
+        if (u === 'ml' && n >= 1000) {
+          return { qty: (n / 1000).toFixed(2), unit: 'L', original: `${n.toLocaleString()} ml` };
+        }
+        return { qty: n.toFixed(2), unit: unit, original: '' };
+      }
+    %>
     <section class="card-panel p-4">
       <div class="mb-3">
         <h2 class="text-xl text-papaGold font-semibold">Stock Inventory</h2>
@@ -85,9 +98,11 @@
           <tbody>
           <% ingredients.forEach(i => { 
               const isLow = Number(i.stock_qty) <= Number(i.reorder_level);
+              const displayStock = formatStock(i.stock_qty, i.unit_measure);
+              const displayPar = formatStock(i.reorder_level, i.unit_measure);
           %>
             <tr class="inventory-row border-t border-slate-700 hover:bg-white/5 transition cursor-pointer"
-                data-search="<%= i.ingredient_name %> <%= i.unit_measure %>"
+                data-search="<%= i.ingredient_name %> <%= i.unit_measure %> <%= displayStock.unit %>"
                 data-is-low="<%= isLow ? 'true' : 'false' %>"
                 data-id="<%= i.id %>"
                 data-name="<%= i.ingredient_name %>"
@@ -103,10 +118,14 @@
                 </span>
               </td>
               <td class="text-right <%= isLow ? 'text-amber-400 font-semibold' : '' %>" onclick="openRestockModal('<%= i.id %>', '<%= i.ingredient_name %>', '<%= i.unit_measure %>', '<%= Number(i.stock_qty).toFixed(2) %>', '<%= Number(i.unit_cost || 0).toFixed(2) %>')">
-                <%= Number(i.stock_qty).toFixed(2) %>
+                <span title="<%= displayStock.original %>"><%= displayStock.qty %></span>
               </td>
-              <td class="text-center text-white/60"><%= i.unit_measure %></td>
-              <td class="text-right text-white/60"><%= i.reorder_level %></td>
+              <td class="text-center font-medium <%= displayStock.unit === 'kg' || displayStock.unit === 'L' ? 'text-papaGold font-semibold' : 'text-white/60' %>">
+                <%= displayStock.unit %>
+              </td>
+              <td class="text-right text-white/60" title="<%= displayPar.original %>">
+                <%= displayPar.qty %> <%= displayPar.unit %>
+              </td>
               <% if (user && ['OWNER', 'MANAGER'].includes(user.role)) { %>
                 <td class="text-right">₱<%= Number(i.unit_cost || 0).toFixed(2) %></td>
               <% } %>
@@ -210,7 +229,7 @@
 
           <div class="pt-3 border-t border-slate-700/60 shrink-0 space-y-2.5 mt-3">
             <div id="saveGuideDrawer" class="hidden bg-slate-800/95 border border-slate-700 p-2.5 rounded transition-all">
-              <div id="guideNameInputRow" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div id="guideNameInputRow" class="flex flex-col sm:row sm:items-center justify-between gap-2">
                 <div class="flex-1 flex items-center gap-2">
                   <span class="text-xs text-white/70 shrink-0">Preset Name:</span>
                   <input type="text" id="inlineGuideNameInput" placeholder="e.g. Meat Shop 2 or Morning Veggies" class="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white focus:border-papaGold focus:outline-none" />
@@ -543,9 +562,17 @@
       document.getElementById('modalIngredientId').value = id || '';
       document.getElementById('modalIngredientName').textContent = name || 'Ingredient';
       
+      const rawStock = parseFloat(stock) || 0;
+      let displayStockText = `${rawStock.toFixed(2)} ${unit || ''}`;
+      if (unit === 'g' && rawStock >= 1000) {
+        displayStockText = `${(rawStock / 1000).toFixed(2)} kg (${rawStock.toLocaleString()} g)`;
+      } else if (unit === 'ml' && rawStock >= 1000) {
+        displayStockText = `${(rawStock / 1000).toFixed(2)} L (${rawStock.toLocaleString()} ml)`;
+      }
+
       const isPrivileged = ['OWNER', 'MANAGER'].includes(currentUserRole);
       const costInfo = isPrivileged ? ` | Cost: ₱${activeModalCost.toFixed(2)} / ${unit || ''}` : '';
-      document.getElementById('modalIngredientStock').textContent = `Current Stock: ${stock || '0.00'} ${unit || ''}${costInfo}`;
+      document.getElementById('modalIngredientStock').textContent = `Current Stock: ${displayStockText}${costInfo}`;
       
       document.getElementById('modalUnitLabel').textContent = unit || 'units';
       document.getElementById('modalInputQty').value = '';
